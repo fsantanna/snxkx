@@ -1,0 +1,56 @@
+;; A button of the interface, as `Button` of the original (in
+;; `buy_screen.lua`): a rounded rectangle with a text, which bounces
+;; and lights up while the mouse is over it.
+;;
+;; A click is not an action of the button: the button emits
+;; `:Button.click [id, spring]` to the task `owner`, which decides what
+;; follows.
+;; The button lives until its owner aborts it.
+
+task Button (owner, id, x, y, label, opts) {
+    val fg_color = opts && opts.fg_color || :bg10
+    val bg_color = opts && opts.bg_color || bg
+    val w = opts && opts.w || (text_width(pixul_font, label) + 8)
+    val h = pixul_font.h + 4
+    val s = spring(1)
+    val t = text([ [text="[" ++ fg_color ++ "]" ++ label, font=pixul_font, alignment=:center] ])
+    set pub = [ spring=s ]
+    var selected = false
+
+    val inside = func () {
+        val mx, my = eng.mouse()
+        (mx >= x - w/2) && (mx <= x + w/2) && (my >= y - h/2) && (my <= y + h/2)
+    }
+
+    spawn UISprings(s)
+    spawn {
+        loop on :draw {
+            eng.push(x, y, 0, s.x)
+            eng.rect(x, y, w, h, 4, 4, if selected => fg@0 => bg_color@0)
+            text_draw(t, x, y + 1, 0, 1, 1)
+            eng.pop()
+        }
+    }
+
+    loop {
+        ;; out
+        if !inside() {
+            await :mouse.mv until inside()
+        }
+        ;; over
+        play(ui_hover1, [pitch=rfloat(1.3, 1.5), volume=0.5])
+        play(pop2, [pitch=rfloat(0.95, 1.05), volume=0.5])
+        set selected = true
+        text_set(t, 0, "[fgm5]" ++ label)
+        spring_pull(s, 0.2, 200, 10)
+        par :any {
+            await :mouse.mv until !inside()
+        } with {
+            loop on :mouse.dn until it.but == 1 {
+                emit @owner :Button.click [ id=id, spring=s ]
+            }
+        }
+        text_set(t, 0, "[" ++ fg_color ++ "]" ++ label)
+        set selected = false
+    }
+}
