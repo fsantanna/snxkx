@@ -1,0 +1,91 @@
+;; The main menu, as `MainMenu` of the original (`mainmenu.lua`): an
+;; arena with walls and stars around it, dimmed, under the title and the
+;; buttons. (The snake that runs in the arena comes with the physics.)
+;;
+;; It returns :quit, or emits `:goto [screen, ...]` when the run starts
+;; and lives on until the transition covers it.
+
+;; The arena of the menu, 80% of the screen.
+val MENU_X1 = W/2 - 0.8*W/2
+val MENU_Y1 = H/2 - 0.8*H/2
+val MENU_X2 = W/2 + 0.8*W/2
+val MENU_Y2 = H/2 + 0.8*H/2
+
+func rect_vertices (x1, y1, x2, y2) {
+    [x1,y1, x2,y1, x2,y2, x1,y2]
+}
+
+val modal_transparent = rgba(0.1, 0.1, 0.1, 0.6)
+
+task Menu () {
+    val walls = [
+        rect_vertices(-40, -40, MENU_X1, H + 40),
+        rect_vertices(MENU_X2, -40, W + 40, H + 40),
+        rect_vertices(MENU_X1, -40, MENU_X2, MENU_Y1),
+        rect_vertices(MENU_X1, MENU_Y2, MENU_X2, H + 40),
+    ]
+    val title = text([ [text="[wavy_mid, fg]SNKRX", font=fat_font, alignment=:center] ])
+
+    spawn Stars()
+
+    ;; the arena: walls, then the stars outside of it, then everything
+    ;; dimmed under the interface
+    spawn {
+        loop on :draw {
+            loop _, v in walls {
+                eng.polygon(v, bg@(-1))         ;; Wall
+            }
+            loop _, v in walls {
+                eng.polygon(v, bg@(-1))         ;; WallCover
+            }
+            eng.canvas_draw_outside(STARS, MENU_X1, MENU_Y1, MENU_X2, MENU_Y2, white@0)
+            eng.rect(W/2, H/2, 2*W, 2*H, nil, nil, modal_transparent)
+        }
+    }
+
+    pin bs = tasks()
+    spawn @bs Button(task, :arena_run, 55, H/2 - 10, "arena run")
+    spawn @bs Button(task, :options,   47, H/2 + 12, "options")
+    spawn @bs Button(task, :quit,      37, H/2 + 34, "quit")
+    val soundtrack =
+        spawn @bs Button(task, :soundtrack, W - 72, H - 40, "buy the soundtrack!")
+    spawn @bs Button(task, :discord, W - 92, H - 17, "join the community discord!")
+
+    spawn {
+        loop on :draw {
+            text_draw(title, 60, H/2 - 40)
+        }
+    }
+
+    ;; the soundtrack button nudges itself every 2s
+    spawn {
+        loop {
+            await 2s
+            spring_pull(soundtrack.pub.spring, 0.025, 200, 10)
+        }
+    }
+
+    loop {
+        val e = await :Button.click
+        match e.id {
+            :arena_run => {
+                play(ui_transition2, [pitch=rfloat(0.95, 1.05), volume=0.5])
+                play(ui_switch2, [pitch=rfloat(0.95, 1.05), volume=0.5])
+                play(ui_switch1, [pitch=rfloat(0.95, 1.05), volume=0.5])
+                emit @:global :goto [ screen=:buy_screen, x=W/2, y=H/2, color=fg@0,
+                                      text="[wavy, bg]starting..." ]
+                await(false)
+            }
+            :quit => {
+                return :quit
+            }
+            \{ (it == :soundtrack) || (it == :discord) } => {
+                ;; the original opens a page in the browser
+                play(ui_switch2, [pitch=rfloat(0.95, 1.05), volume=0.5])
+                spring_pull(e.spring, 0.2, 200, 10)
+                play(ui_switch1, [pitch=rfloat(0.95, 1.05), volume=0.5])
+            }
+            else => nil     ;; options: the pause menu comes later
+        }
+    }
+}
