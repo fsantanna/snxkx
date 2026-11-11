@@ -1,0 +1,148 @@
+;; Text with tags, as `Text` of the original (`engine/graphics/text.lua`)
+;; with the tags of `global_text_tags` (`shared.lua`).
+;;
+;; A text is a vector of lines, each one a table with `text`, `font`, and
+;; optionally `alignment` (:left, :center, :right), `height_multiplier`,
+;; `height_offset`, `sx`, and `sy`. In a line, `[a, b]` sets the tags of
+;; the characters that follow, and `[]` clears them:
+;;
+;;      "[wavy_mid, fg]shop [fg]- gold: [yellow]3"
+;;
+;; A tag is a color of the palette or a wave. The original also has tags
+;; with timers (`cbyc`), which belong to the screens that use them.
+
+;; The colors of the tags, by name.
+val TAG_COLORS = [
+    red=red@0, orange=orange@0, yellow=yellow@0, yellow2=yellow2@0,
+    green=green@0, purple=purple@0, blue=blue@0, blue2=blue2@0,
+    bg=bg@0, bg3=bg@3, bg10=bg@10, bgm2=bg@(-2), light_bg=bg@5,
+    fg=fg@0, fgm1=fg@(-1), fgm2=fg@(-2), fgm3=fg@(-3), fgm4=fg@(-4),
+    fgm5=fg@(-5), fgm6=fg@(-6), fgm7=fg@(-7), fgm8=fg@(-8), fgm9=fg@(-9),
+    fgm10=fg@(-10), greenm5=green@(-5), green5=green@5, blue5=blue@5,
+    bluem5=blue@(-5), blue25=blue2@5, blue2m5=blue2@(-5), yellow25=yellow2@5,
+    yellow2m5=yellow2@(-5), redm5=red@(-5), orangem5=orange@(-5),
+    purplem5=purple@(-5), yellowm5=yellow@(-5),
+]
+
+;; The waves of the tags, by name: amplitude and frequency.
+val TAG_WAVES = [
+    wavy       = [2,    4],
+    wavy_mid   = [0.75, 3],
+    wavy_mid2  = [0.5,  3],
+    wavy_lower = [0.25, 2],
+]
+
+;; The characters of a line, each with its tags, as `Text:parse`.
+func text_parse (s) {
+    val cs = []
+    var tags = []
+    var i = 0
+    val n = #s
+    loop {
+        while i < n
+        val c = string.sub(s, i, i)
+        if c == "[" {
+            val j = string.find(s, "]", i) --> assert
+            set tags = []
+            loop _, tag in string.split(string.sub(s, i+1, j-1), ",") {
+                val t = string.split(tag)
+                if #t > 0 {
+                    set tags@+ = t@0
+                }
+            }
+            set i = j + 1
+        } else {
+            set cs@+ = [ c=c, tags=tags ]
+            set i += 1
+        }
+    }
+    cs
+}
+
+;; A text of lines, laid out as `Text:format_text`.
+func text (lines) {
+    val t = :Text [ lines=lines, w=0, h=0 ]
+    loop _, line in lines {
+        set line.chars = text_parse(line.text)
+        set line.raw = vector.join(loop_chars(line.chars))
+    }
+    text_layout(t)
+    t
+}
+
+func loop_chars (cs) {
+    val out = []
+    loop _, c in cs {
+        set out@+ = c.c
+    }
+    out
+}
+
+;; Sets the text of a line, as `Text:set_text` of one line.
+func text_set (t, i, s) {
+    val line = t.lines@(i)
+    set line.text = s
+    set line.chars = text_parse(s)
+    set line.raw = vector.join(loop_chars(line.chars))
+    text_layout(t)
+}
+
+func text_layout (t) {
+    set t.w = 0
+    loop _, line in t.lines {
+        val lw = math.max(text_width(line.font, line.raw), line.alignment_width || 0)
+        if lw > t.w {
+            set t.w = lw
+        }
+    }
+    var y = 0
+    loop _, line in t.lines {
+        val h = (line.font.h*(line.height_multiplier || 1) + (line.height_offset || 0))*(line.sy || 1)
+        var x = 0
+        loop _, c in line.chars {
+            set c.x = x
+            set c.y = y
+            set x += text_width(line.font, c.c)
+        }
+        set line.width = x
+        set y += h
+    }
+    set t.h = y
+    loop _, line in t.lines {
+        val left = t.w - (line.alignment_width || line.width)
+        val dx = match line.alignment {
+            :right  => left
+            :center => left/2
+            else    => 0
+        }
+        loop _, c in line.chars {
+            set c.x += dx
+        }
+    }
+}
+
+;; Draws a text centered at (x,y), as `Text:draw(x, y, r, sx, sy)`. The
+;; waves follow the real time of the game (`time` of the original).
+func text_draw (t, x, y, r, sx, sy) {
+    val time = eng.tick() / 60
+    loop _, line in t.lines {
+        loop i, c in line.chars {
+            var color = white@0
+            var oy = 0
+            loop _, tag in c.tags {
+                val k = TAG_COLORS@(tag)
+                if k {
+                    set color = k
+                }
+                val w = TAG_WAVES@(tag)
+                if w {
+                    set oy = w@0 * math.sin(w@1*time + i + 1)
+                }
+            }
+            eng.push(x, y, r, sx, sy)
+            print_at(line.font, c.c, x + c.x - t.w/2, y + c.y - t.h/2, 0,
+                     line.sx || 1, line.sy || line.sx || 1, 0, oy, color)
+            eng.pop()
+        }
+    }
+}

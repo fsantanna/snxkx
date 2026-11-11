@@ -1,0 +1,26 @@
+;; Text with tags: colors, waves, alignment, two lines.
+
+include "../../eng/eng.atm"
+include "../../eng/color.atm"
+include "../../eng/text.atm"
+
+val main = eng.canvas(true, true)
+eng.background(bg@0)
+val fat   = font("FatPixelFont", 8)
+val pixul = font("PixulBrush", 8)
+
+val t1 = text([ [text="[wavy_mid, fg]shop [fg]- gold: [yellow]3", font=pixul, alignment=:center] ])
+val t2 = text([
+    [text="[fg]a longer first line", font=pixul, alignment=:center],
+    [text="[red]right", font=pixul, alignment=:right],
+    [text="[]plain [blue2]blue", font=pixul],
+])
+val t3 = text([ [text="[wavy, bg10]SNKRX", font=fat] ])
+print(t1.w, t1.h, t2.w, t2.h, t3.w, t3.h)
+
+loop on :draw {
+    eng.target(main)
+    text_draw(t1, 100, 30)
+    text_draw(t2, 240, 120)
+    text_draw(t3, 380, 200, 0, 2, 2)
+}

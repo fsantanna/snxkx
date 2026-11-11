@@ -1,0 +1,2 @@
+SNX_FRAMES=10
+SNX_SHOT=10:$OUT/eng-tags.png
