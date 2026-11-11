@@ -12,6 +12,16 @@ callback of the original (`after`, `every`, `tween`, `cooldown`)
 becomes an `await` in a task, and the flags and timestamps that guard
 the phases of the game disappear.
 
+## Running
+
+On Ubuntu 24.04, with the packages listed in `tools/setup.sh`:
+
+```
+tools/setup.sh      # the compiler, Box2D, and the original, in ext/
+./run.sh            # the game
+tst/run.sh          # the tests, with no screen
+```
+
 ## Status
 
 Work in progress. See `doc/` and the plan of the port.
