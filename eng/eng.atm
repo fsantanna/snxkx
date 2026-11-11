@@ -1,0 +1,120 @@
+;; The engine of the port, in Atmos, over `eng/eng.h`.
+;;
+;; The program runs inside the loop of `eng.h`, which emits, once per
+;; tick of 1/60 s:
+;;
+;;      :key.dn [name]          a key was pressed  (names of SDL: 'A', 'Left')
+;;      :key.up [name]          a key was released
+;;      :mouse.mv [x,y]         the mouse moved    (in game pixels)
+;;      :mouse.dn [x,y,but]     a button was pressed (1 left, 3 right)
+;;      :mouse.up [x,y,but]     a button was released
+;;      :quit                   the window was closed
+;;      (time)                  so that `await 1s` and `:clock` work
+;;      :draw                   to draw the frame
+;;
+;; The game is 480x270 pixels, scaled to the window. Shapes are drawn in
+;; the current canvas, in the current transform, as `graphics` of the
+;; original. Colors are integers 0xRRGGBBAA (see `rgba`).
+
+```:prelude
+#include "eng/eng.h"
+```
+
+val W = 480
+val H = 270
+
+val eng = [
+    ;; canvases: eng.canvas(screen, shadow) creates one, eng.target(c)
+    ;; selects where the shapes go, eng.canvas_draw(c, x, y, color)
+    ;; draws an earlier canvas into the current one
+    canvas = func (screen, shadow) {
+        `:number eg_canvas_new(a_truthy($screen), a_truthy($shadow))`
+    },
+    target = func (c) {
+        `eg_canvas_set(eg_int($c));`
+    },
+    canvas_draw = func (c, x, y, color) {
+        `eg_canvas_draw(eg_int($c), eg_dbl($x), eg_dbl($y), eg_color($color));`
+    },
+    background = func (color) {
+        `EG_BG = eg_color($color);`
+    },
+
+    ;; transforms, as `graphics.push` and `graphics.pop`
+    push = func (x, y, r, sx, sy) {
+        val s = sx || 1
+        `eg_push(eg_dbl($x), eg_dbl($y), eg_dbl($r), eg_dbl($s), a_isnum($sy) ? a_dbl($sy) : eg_dbl($s));`
+    },
+    pop = func () {
+        `eg_pop();`
+    },
+    translate = func (x, y) {
+        `eg_translate(eg_dbl($x), eg_dbl($y));`
+    },
+
+    ;; shapes: filled with `color`, or a line of width `lw` when given
+    ;; rect: centered at (x,y), with corners of radius (rx,ry)
+    rect = func (x, y, w, h, rx, ry, color, lw) {
+        `eg_rect(eg_dbl($x)-eg_dbl($w)/2, eg_dbl($y)-eg_dbl($h)/2, eg_dbl($w), eg_dbl($h), eg_dbl($rx), eg_dbl($ry), eg_color($color), eg_dbl($lw));`
+    },
+    ;; rect2: with (x,y) as the top-left corner
+    rect2 = func (x, y, w, h, rx, ry, color, lw) {
+        `eg_rect(eg_dbl($x), eg_dbl($y), eg_dbl($w), eg_dbl($h), eg_dbl($rx), eg_dbl($ry), eg_color($color), eg_dbl($lw));`
+    },
+    circle = func (x, y, r, color, lw) {
+        `eg_ellipse(eg_dbl($x), eg_dbl($y), eg_dbl($r), eg_dbl($r), eg_color($color), eg_dbl($lw));`
+    },
+    ellipse = func (x, y, rx, ry, color, lw) {
+        `eg_ellipse(eg_dbl($x), eg_dbl($y), eg_dbl($rx), eg_dbl($ry), eg_color($color), eg_dbl($lw));`
+    },
+    ;; arc: type :pie, :open, or :closed, from angle r1 to r2
+    arc = func (type, x, y, r, r1, r2, color, lw) {
+        val t = match type { :open => 1 ; :closed => 2 ; else => 0 }
+        `eg_arc(eg_int($t), eg_dbl($x), eg_dbl($y), eg_dbl($r), eg_dbl($r1), eg_dbl($r2), eg_color($color), eg_dbl($lw));`
+    },
+    ;; polygon: a convex polygon [x1,y1,x2,y2,...]
+    polygon = func (pts, color, lw) {
+        `eg_polygon($pts, eg_color($color), eg_dbl($lw));`
+    },
+    polyline = func (pts, color, lw) {
+        `eg_polyline($pts, eg_color($color), eg_dbl($lw));`
+    },
+    line = func (x1, y1, x2, y2, color, lw) {
+        `eg_line(eg_dbl($x1), eg_dbl($y1), eg_dbl($x2), eg_dbl($y2), eg_color($color), eg_dbl($lw));`
+    },
+    ;; gradient: a vertical gradient in a rectangle, (x,y) top-left
+    gradient = func (x, y, w, h, c1, c2) {
+        `eg_gradient(eg_dbl($x), eg_dbl($y), eg_dbl($w), eg_dbl($h), eg_color($c1), eg_color($c2));`
+    },
+
+    ;; the mouse, in game pixels; the tick; the test mode
+    mouse = func () {
+        return `:number.float EG_MX`, `:number.float EG_MY`
+    },
+    tick = func () {
+        `:number EG_TICK`
+    },
+    testing = func () {
+        `:boolean EG_TEST`
+    },
+]
+
+;;; COLORS ;;;
+
+;; A color from components in [0,1], as `Color(r,g,b,a)` of the original.
+func rgba (r, g, b, a) {
+    val f = \(v) { math.floor(math.max(0, math.min(1, v)) * 255 + 0.5) }
+    (f(r) << 24) | (f(g) << 16) | (f(b) << 8) | f(if a == nil => 1 => a)
+}
+
+;; A color from "#rrggbb".
+func hex (s) {
+    val n = tonumber("0x" ++ string.sub(s, 1))
+    (n << 8) | 0xFF
+}
+
+;; The components of a color, in [0,1].
+func comps (c) {
+    return ((c >> 24) & 0xFF) / 255, ((c >> 16) & 0xFF) / 255,
+           ((c >> 8) & 0xFF) / 255, (c & 0xFF) / 255
+}

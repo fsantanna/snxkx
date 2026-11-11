@@ -1,0 +1,29 @@
+;; The shapes of the engine, in the canvases of the original: a
+;; background with no shadow, and a main canvas with its shadow.
+
+include "../../eng/eng.atm"
+
+val bg   = eng.canvas(true, false)
+val main = eng.canvas(true, true)
+eng.background(hex("#303030"))
+
+loop on :draw {
+    eng.target(bg)
+    eng.rect2(0, 0, 22, 22, nil, nil, rgba(46/255, 46/255, 46/255))
+    eng.gradient(0, 0, W, H, rgba(0.5, 0.5, 0.5, 0), rgba(0, 0, 0, 0.3))
+
+    eng.target(main)
+    eng.rect(60, 60, 80, 40, 6, 6, hex("#facf00"))
+    eng.rect(60, 120, 80, 40, 6, 6, hex("#dadada"), 2)
+    eng.circle(180, 60, 20, hex("#019bd6"))
+    eng.circle(180, 120, 20, hex("#8bbf40"), 3)
+    eng.arc(:pie, 260, 60, 20, 0, math.pi, hex("#e91d39"))
+    eng.arc(:open, 260, 120, 20, 0, math.pi, hex("#8e559e"), 2)
+    eng.polygon([320,40, 360,60, 320,80], hex("#f07021"))
+    eng.polyline([300,110, 330,140, 360,110, 390,140], hex("#dadada"), 2)
+    eng.line(20, 200, 460, 200, hex("#dadada"))
+    eng.push(400, 220, math.pi/4, 2)
+    eng.rect(400, 220, 10, 10, 2, 2, hex("#4778ba"))
+    eng.pop()
+    eng.rect(100, 230, 60, 20, 4, 4, rgba(1, 1, 1, 0.5))
+}
