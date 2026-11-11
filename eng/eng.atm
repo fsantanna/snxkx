@@ -211,3 +211,15 @@ func sound_len (snd) {
     val i = snd.i
     `:number.float eg_snd_len(eg_int($i))`
 }
+
+;;; TRACE ;;;
+
+;; With SNX_TRACE=1, the program prints events in the format of the trace
+;; of the original (`tools/bench/bench.lua`): tick, event, details.
+val TRACE = os.getenv("SNX_TRACE") != nil
+
+func trace (ev, details) {
+    if TRACE {
+        print(eng.tick() ++ "\t" ++ ev ++ "\t" ++ (details || "-"))
+    }
+}
