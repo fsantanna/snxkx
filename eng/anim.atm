@@ -91,3 +91,15 @@ task Tween (dur, target, source, method) {
         until timer > dur
     }
 }
+
+;; The same, in every tick of real time, for the interface, which keeps
+;; moving in slow motion (`force_update` of the original).
+task UISprings (...) {
+    val ss = [...]
+    loop e on :tick {
+        val dt = e.us / 1000000
+        loop _, s in ss {
+            spring_update(s, dt)
+        }
+    }
+}
