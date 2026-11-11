@@ -1,4 +1,5 @@
-;; The events of the engine, from the test script: mouse, keys, time.
+;; The events of the engine, from the test script: mouse, keys, time,
+;; and the game time in slow motion.
 
 include "../../eng/eng.atm"
 
@@ -17,5 +18,13 @@ spawn {
     print(eng.tick(), "1s")
     await 500ms
     print(eng.tick(), "1.5s")
+    eng.slow(0.5)
+    await 1s
+    print(eng.tick(), "1s at half speed")
+    eng.slow(1)
+}
+spawn {
+    val e = await :tick
+    print(eng.tick(), e.tag, e.us)
 }
 await(false)

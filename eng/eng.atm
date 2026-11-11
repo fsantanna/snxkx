@@ -9,7 +9,9 @@
 ;;      :mouse.dn [x,y,but]     a button was pressed (1 left, 3 right)
 ;;      :mouse.up [x,y,but]     a button was released
 ;;      :quit                   the window was closed
-;;      (time)                  so that `await 1s` and `:clock` work
+;;      :tick [us]              the real time of the tick (1/60 s, in us)
+;;      (time)                  the game time, which `await 1s` and `:clock`
+;;                              follow: the real time scaled by `eng.slow`
 ;;      :draw                   to draw the frame
 ;;
 ;; The game is 480x270 pixels, scaled to the window. Shapes are drawn in
@@ -85,6 +87,11 @@ val eng = [
     ;; gradient: a vertical gradient in a rectangle, (x,y) top-left
     gradient = func (x, y, w, h, c1, c2) {
         `eg_gradient(eg_dbl($x), eg_dbl($y), eg_dbl($w), eg_dbl($h), eg_color($c1), eg_color($c2));`
+    },
+
+    ;; eng.slow(f): the game time runs at f times the real time
+    slow = func (f) {
+        `EG_SLOW = eg_dbl($f);`
     },
 
     ;; the mouse, in game pixels; the tick; the test mode

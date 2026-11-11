@@ -1,3 +1,4 @@
+1	tick	16666
 3	mouse.mv	10.5	20.0	0
 4	mouse.dn	10.5	20.0	1
 5	mouse.up	10.5	20.0	1
@@ -5,3 +6,4 @@
 7	key.up	Left
 60	1s
 90	1.5s
+210	1s at half speed

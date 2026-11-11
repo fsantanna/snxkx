@@ -39,6 +39,8 @@ static int           EG_SND  = 0;       // audio is open
 static int           EG_TEST = 0;       // test mode: fixed ticks, no cap
 static int           EG_TICK = 0;       // the number of the current tick
 static double        EG_MX = 0, EG_MY = 0;  // the mouse, in game pixels
+static double        EG_SLOW = 1.0;     // the scale of the game time
+static double        EG_GAME = 0.0;     // game time not emitted yet, in us
 
 static int eg_int (AVal v) {
     return a_isnum(v) ? (int) a_dbl(v) : 0;
@@ -886,6 +888,8 @@ static AStatus eg_emit (const char* tag, const char* name, double x, double y, i
     a_tag(evt, t);
     if (name != NULL) {
         eg_field(evt, "name", a_strz(name));
+    } else if (but == -2) {
+        eg_field(evt, "us", a_int((int64_t)x));
     } else if (but >= 0) {
         eg_field(evt, "x", a_num(x));
         eg_field(evt, "y", a_num(y));
@@ -956,7 +960,10 @@ static AStatus eg_script (const char* var, int tick) {
 //       :key.dn [name]         :key.up [name]      (names of SDL: 'A', 'Left')
 //       :mouse.mv [x,y]        :mouse.dn [x,y,but] :mouse.up [x,y,but]
 //       :quit
-//   - the time of the tick, in microseconds (60 ticks are exactly 1s);
+//   - :tick [us], the real time of the tick, in microseconds (60 ticks
+//     are exactly 1 s);
+//   - the game time, the real time scaled by EG_SLOW (the slow motion of
+//     the original), so that `await 1s` and `:clock` follow it;
 //   - :draw, and the frame is rendered.
 //
 // Environment:
@@ -1060,10 +1067,19 @@ int main (int argc, char** argv) {
             st = eg_script("SNX_INPUT", tick);
         }
 
-        // time: 1/60 s, rounded so that 60 ticks are exactly 1 s
+        // real time: 1/60 s, rounded so that 60 ticks are exactly 1 s
+        int64_t us = (int64_t)tick*1000000/60 - (int64_t)(tick-1)*1000000/60;
         if (st == A_OK) {
-            int64_t us = (int64_t)tick*1000000/60 - (int64_t)(tick-1)*1000000/60;
-            st = atm_emit(a_int(us));
+            st = eg_emit("tick", NULL, (double)us, 0, -2);
+        }
+        // game time: the real time, scaled by the slow motion
+        if (st == A_OK) {
+            EG_GAME += us * EG_SLOW;
+            int64_t g = (int64_t) EG_GAME;
+            if (g > 0) {
+                EG_GAME -= g;
+                st = atm_emit(a_int(g));
+            }
         }
 
         // screen
