@@ -118,3 +118,48 @@ func comps (c) {
     return ((c >> 24) & 0xFF) / 255, ((c >> 16) & 0xFF) / 255,
            ((c >> 8) & 0xFF) / 255, (c & 0xFF) / 255
 }
+
+;;; FONTS, TEXT, IMAGES ;;;
+
+;; The assets of the original are read from its checkout, outside the
+;; repository (see `doc/assets.md`).
+val ASSETS = (os.getenv("SNKRX_DIR") || "ext/SNKRX") ++ "/assets/"
+
+;; A font of the original by name, as `Font(name, size)`.
+func font (name, size) {
+    val p = ASSETS ++ "fonts/" ++ name ++ ".ttf"
+    val i = `:number eg_font_new(eg_cstr($p), eg_int($size))`
+    assert(i >= 0, "font : " ++ name)
+    :Font [ i=i, h=`:number EG_FNTS[eg_int($i)].h` ]
+}
+
+;; The width of a text in a font.
+func text_width (f, s) {
+    val i = f.i
+    `:number eg_text_width(eg_int($i), eg_cstr($s))`
+}
+
+;; eng.print(f, s, x, y, r, sx, sy, ox, oy, color), as `graphics.print`.
+func print_at (f, s, x, y, r, sx, sy, ox, oy, color) {
+    val i = f.i
+    `eg_print(eg_int($i), eg_cstr($s), eg_dbl($x), eg_dbl($y), eg_dbl($r), a_isnum($sx) ? a_dbl($sx) : 1, a_isnum($sy) ? a_dbl($sy) : (a_isnum($sx) ? a_dbl($sx) : 1), eg_dbl($ox), eg_dbl($oy), eg_color($color));`
+}
+
+;; Prints a text centered at (x,y), as `graphics.print_centered`.
+func print_centered (f, s, x, y, r, sx, sy, color) {
+    print_at(f, s, x, y, r, sx, sy, text_width(f, s)/2, f.h/2, color)
+}
+
+;; An image of the original by name, as `Image(name)`.
+func image (name) {
+    val p = ASSETS ++ "images/" ++ name ++ ".png"
+    val i = `:number eg_img(eg_cstr($p))`
+    assert(i >= 0, "image : " ++ name)
+    :Image [ i=i, w=`:number eg_img_dim(eg_int($i),1)`, h=`:number eg_img_dim(eg_int($i),0)` ]
+}
+
+;; Draws an image centered at (x,y), as `Image:draw`.
+func draw_image (img, x, y, r, sx, sy, color) {
+    val i = img.i
+    `eg_img_draw(eg_int($i), eg_dbl($x), eg_dbl($y), eg_dbl($r), a_isnum($sx) ? a_dbl($sx) : 1, a_isnum($sy) ? a_dbl($sy) : (a_isnum($sx) ? a_dbl($sx) : 1), eg_color($color));`
+}

@@ -1,0 +1,19 @@
+;; Text in the fonts of the original, and an image.
+
+include "../../eng/eng.atm"
+
+val main = eng.canvas(true, true)
+eng.background(hex("#303030"))
+val fat   = font("FatPixelFont", 8)
+val pixul = font("PixulBrush", 8)
+val icon  = image("warrior")
+print(fat.h, pixul.h, text_width(fat, "arena run"), text_width(pixul, "arena run"))
+print(icon.w, icon.h)
+
+loop on :draw {
+    eng.target(main)
+    print_at(fat, "SNKRX", 20, 20, 0, 4, 4, 0, 0, hex("#dadada"))
+    print_centered(pixul, "arena run", 240, 100, 0, 1, 1, hex("#dadada"))
+    print_centered(fat, "rotated", 240, 150, math.pi/8, 2, 2, hex("#facf00"))
+    draw_image(icon, 400, 200, 0, 2, 2, hex("#ffffff"))
+}
