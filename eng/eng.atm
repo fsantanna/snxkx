@@ -38,6 +38,11 @@ val eng = [
     canvas_draw = func (c, x, y, color) {
         `eg_canvas_draw(eg_int($c), eg_dbl($x), eg_dbl($y), eg_color($color));`
     },
+    ;; eng.canvas_draw_outside(c, x1, y1, x2, y2, color): the same,
+    ;; except inside a rectangle (an inverted mask)
+    canvas_draw_outside = func (c, x1, y1, x2, y2, color) {
+        `eg_canvas_draw_outside(eg_int($c), eg_dbl($x1), eg_dbl($y1), eg_dbl($x2), eg_dbl($y2), eg_color($color));`
+    },
     background = func (color) {
         `EG_BG = eg_color($color);`
     },
