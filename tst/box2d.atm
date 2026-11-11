@@ -1,0 +1,34 @@
+;; Box2D v3 linked through a native prelude: two circles, one moving
+;; to the other, with the step of the first contact.
+
+```:prelude
+#include <box2d/box2d.h>
+
+static int b2t_first_contact (void) {
+    b2WorldDef wd = b2DefaultWorldDef();
+    wd.gravity = (b2Vec2) { 0, 0 };
+    b2WorldId w = b2CreateWorld(&wd);
+    b2BodyDef bd = b2DefaultBodyDef();
+    bd.type = b2_dynamicBody;
+    b2ShapeDef sd = b2DefaultShapeDef();
+    sd.enableContactEvents = true;
+    b2Circle c = { { 0, 0 }, 1 };
+    bd.position = (b2Vec2) { 0, 0 };
+    bd.linearVelocity = (b2Vec2) { 10, 0 };
+    b2CreateCircleShape(b2CreateBody(w, &bd), &sd, &c);
+    bd.position = (b2Vec2) { 5, 0 };
+    bd.linearVelocity = (b2Vec2) { 0, 0 };
+    b2CreateCircleShape(b2CreateBody(w, &bd), &sd, &c);
+    int ret = -1;
+    for (int i = 0; i < 60 && ret == -1; i++) {
+        b2World_Step(w, 1.0f / 60, 4);
+        if (b2World_GetContactEvents(w).beginCount > 0) {
+            ret = i;
+        }
+    }
+    b2DestroyWorld(w);
+    return ret;
+}
+```
+
+print("first contact at step", `:number b2t_first_contact()`)
