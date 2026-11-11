@@ -318,3 +318,196 @@ spawn {
 
 The `every` becomes a loop with an await. The spring is public in the
 button (`pub.spring`) only for this.
+
+---
+
+## 5. Button click: the action flow
+
+A click on *arena run* starts a transition, and the next screen comes
+when the transition covers the menu.
+
+### Lua + LÖVE
+
+Each button receives an `action`, a function that the button calls on
+a click (`buy_screen.lua:621-625`). The action of *arena run* creates
+the transition and gives it another function, `transition_action`,
+which loads the run and goes to the shop (`mainmenu.lua:85-111`):
+
+```lua
+self.arena_run_button = Button{..., button_text = 'arena run', ..., action = function(b)
+  ui_transition2:play{pitch = random:float(0.95, 1.05), volume = 0.5}
+  ...
+  TransitionEffect{group = main.transitions, x = gw/2, y = gh/2, color = ..., transition_action = function()
+    self.transitioning = true
+    ...
+    main:add(BuyScreen'buy_screen')
+    main:go_to('buy_screen', run.level or 1, ...)
+  end, text = Text({{text = '[wavy, ...]starting...', ...}}, global_text_tags)}
+end}
+```
+
+What the menu does after a click is in a function inside a function,
+both given away: the first to the button, the second to the transition.
+The menu also sets a flag, `self.transitioning`, which its `update`
+reads to stop the menu while the next screen starts
+(`mainmenu.lua:180`).
+
+### Atmos
+
+The button only reports the click to its owner (section 3), and the
+menu waits for clicks in a loop, after it creates its buttons
+(`src/menu.atm:68-91`):
+
+```
+loop {
+    val e = await :Button.click
+    match e.id {
+        :arena_run => {
+            play(ui_transition2, [pitch=rfloat(0.95, 1.05), volume=0.5])
+            ...
+            emit @:global :goto [ screen=:buy_screen, x=W/2, y=H/2, color=fg@0,
+                                  text="[wavy, bg]starting..." ]
+            await(false)
+        }
+        :quit => {
+            return :quit
+        }
+        ...
+    }
+}
+```
+
+### Analysis
+
+In the original, the continuation of a click (the transition, then the
+shop) is carried by functions given to other objects, and runs later,
+inside them. In the port, it is the code after `await :Button.click`,
+in the menu: the menu decides what follows a click, and the button does
+not know.
+
+The menu does not start the next screen itself either: it asks for it
+(`:goto`), and lives on, as the original's menu does while the circle
+grows over it. After the request, the menu awaits nothing
+(`await(false)`): it no longer accepts clicks, with no flag for that.
+In the original, a second click on *arena run* during the transition
+would create a second transition.
+
+---
+
+## 6. Transition effect: control flow
+
+The transition is a circle that grows from a point until it covers the
+screen, with a text in the middle. Then the screen below changes, and
+the circle shrinks.
+
+### Lua + LÖVE
+
+`TransitionEffect` (`shared.lua:455-476`) is five timers, nested in
+their callbacks:
+
+```lua
+function TransitionEffect:init(args)
+  self:init_game_object(args)
+  self.rs = 0
+  self.text_sx, self.text_sy = 0, 0
+  self.t:after(0.25, function()
+    self.t:after(0.1, function()
+      self.t:tween(0.1, self, {text_sx = 1, text_sy = 1}, math.cubic_in_out)
+    end)
+    self.t:tween(0.6, self, {rs = 1.2*gw}, math.linear, function()
+      if self.transition_action then self:transition_action(unpack(self.transition_action_args or {})) end
+      self.t:after(0.3, function()
+        self.x, self.y = gw/2, gh/2
+        self.t:after(0.6, function() self.t:tween(0.05, self, {text_sx = 0, text_sy = 0}, math.cubic_in_out) end)
+        if not args.dont_tween_out then
+          self.t:tween(0.6, self, {rs = 0}, math.linear, function() self.text = nil; self.dead = true end)
+        else
+          self.t:after(0.6, function() self.text = nil; self.dead = true end)
+        end
+      end)
+    end)
+  end)
+end
+```
+
+### Atmos
+
+The transition is a task (`src/shared.atm:103-128`):
+
+```
+task Transition (x, y, color, txt) {
+    val st = [ x=x, y=y, rs=0, ts=0 ]
+    val t = text([ [text=txt, font=pixul_font, alignment=:center] ])
+    spawn {
+        loop on :draw {
+            eng.circle(st.x, st.y, st.rs, color)
+            text_draw(t, W/2, H/2, 0, st.ts, st.ts)
+        }
+    }
+    await 250ms
+    spawn {
+        await 100ms
+        await Tween(0.1, st, [ts=1], cubic_in_out)
+    }
+    await Tween(0.6, st, [rs=1.2*W], linear)
+    emit @:global :covered
+    await 300ms
+    set st.x = W/2
+    set st.y = H/2
+    spawn {
+        await 600ms
+        await Tween(0.05, st, [ts=0], cubic_in_out)
+    }
+    await Tween(0.6, st, [rs=0], linear)
+}
+```
+
+and the screens wait for it (`main.atm:23-48`):
+
+```
+par {
+    var screen = [ Menu, nil, "mainmenu" ]
+    loop {
+        val next = do {
+            trace("go", screen@2)
+            pin s = spawn (screen@0)(screen@1)
+            val e = await <:goto || s>
+            if e == :quit {
+                break
+            }
+            await :covered
+            e
+        }
+        set screen = match next.screen { ... }
+    }
+} with {
+    loop e on :goto {
+        await Transition(e.x, e.y, e.color, e.text)
+    }
+}
+```
+
+### Analysis
+
+The five timers become a sequence: each `after` is an `await` of a
+duration, each `tween` with a callback is an `await Tween(...)`
+followed by the code of the callback, and the two timers that run
+alongside the main line (the text pops in, and later out) are two
+`spawn` blocks. The nesting of five levels becomes the indentation of
+one. The end of the transition, `self.dead = true`, is the end of the
+task.
+
+The callback in the middle, `transition_action`, becomes an event,
+`:covered`, which the loop of screens awaits: when it comes, the block
+of the old screen ends, and the language aborts the screen with all its
+tasks. The original has no such end: its `transition_action` calls
+`main:go_to`, and each screen cleans up in its `on_exit`, by hand
+(`mainmenu.lua:142-163`, twenty lines that destroy groups and set
+fields to `nil`).
+
+The transitions run in the second branch of a `par`, so they are drawn
+after the screens, and a transition outlives the screen it covers.
+
+Measured with the trace of both programs (`tst/game/menu.out` and
+`tst/original/run1.txt`): with a click at tick 62, the shop starts at
+tick 113 in both.
