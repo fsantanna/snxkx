@@ -1,0 +1,93 @@
+;; Springs, tweens, and easing, as the engine of the original.
+;;
+;; A spring is a record that a task updates once per tick of game time.
+;; A tween is a task: it changes fields of a table during a time, and
+;; terminates, so that `await Tween(...)` replaces `tween(..., after)`.
+
+;;; EASING ;;;
+
+func lerp (t, src, dst) {
+    src*(1 - t) + dst*t
+}
+
+func linear (t) {
+    t
+}
+
+func cubic_in_out (t) {
+    val u = t * 2
+    if u < 1 {
+        0.5*u*u*u
+    } else {
+        val v = u - 2
+        0.5*(v*v*v + 2)
+    }
+}
+
+val LN210 = 10 * 0.6931471805599453
+
+func expo_out (t) {
+    if t == 1 => 1 => 1 - math.exp(-LN210*t)
+}
+
+;;; SPRINGS ;;;
+
+;; A spring at x, with stiffness k and damping d, as `Spring(x, k, d)`.
+func spring (x, k, d) {
+    val x0 = x || 0
+    :Spring [ x=x0, k=(k || 100), d=(d || 10), target=x0, v=0 ]
+}
+
+func spring_update (s, dt) {
+    val a = -s.k*(s.x - s.target) - s.d*s.v
+    set s.v = s.v + a*dt
+    set s.x = s.x + s.v*dt
+}
+
+;; Pulls the spring by f, as `Spring:pull(f, k, d)`.
+func spring_pull (s, f, k, d) {
+    if k { set s.k = k }
+    if d { set s.d = d }
+    set s.x = s.x + f
+}
+
+;; Moves the rest of the spring to x, as `Spring:animate(x, k, d)`.
+func spring_animate (s, x, k, d) {
+    if k { set s.k = k }
+    if d { set s.d = d }
+    set s.target = x
+}
+
+;; Updates springs in every tick of game time, while it lives.
+task Springs (...) {
+    val ss = [...]
+    loop us on :clock {
+        val dt = us / 1000000
+        loop _, s in ss {
+            spring_update(s, dt)
+        }
+    }
+}
+
+;;; TWEENS ;;;
+
+;; Changes the fields of `target` to the values in `source`, during `dur`
+;; seconds of game time, with an easing `method`. As the original, the
+;; fields change in every tick, and the tween ends in the first tick past
+;; `dur` (its fields may overshoot the values by a tick).
+task Tween (dur, target, source, method) {
+    val from = []
+    loop k, _ in source {
+        set from@(k) = target@(k)
+    }
+    val f = method || linear
+    var timer = 0
+    loop us on :clock {
+        set timer += us / 1000000
+        val t = f(timer / dur)
+        loop k, v in source {
+            set target@(k) = lerp(t, from@(k), v)
+        }
+        until timer > dur
+    }
+}
