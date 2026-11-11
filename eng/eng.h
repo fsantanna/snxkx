@@ -143,6 +143,7 @@ typedef struct {
 
 typedef struct {
     SDL_Texture* tex;           // the target, EG_W x EG_H
+    SDL_Texture* out;           // what is drawn of it (see `eg_canvas_out`)
     SDL_Vertex*  vs;            // the triangles of this frame
     int          vs_n, vs_max;
     EgRun*       rs;
@@ -156,6 +157,14 @@ static EgCanvas EG_CVS[EG_CANVASES];
 static int      EG_CVS_N = 0;
 static int      EG_CUR   = 0;   // the canvas that receives the shapes
 static SDL_Texture* EG_SHADOW = NULL;
+
+// LÖVE draws a canvas premultiplied: its content went through the alpha
+// blending already. SDL blends it again, unless the renderer has a
+// premultiplied blend mode (OpenGL has, the software renderer has not).
+// Then the content is read back and divided by its alpha, into a
+// streaming texture that SDL blends as usual.
+static SDL_BlendMode EG_PREMUL;
+static int           EG_PREMUL_OK = -1;     // not checked yet
 static SDL_Color EG_BG = { 0x30, 0x30, 0x30, 0xFF };
 
 static int eg_canvas_new (int screen, int shadow) {
@@ -166,7 +175,22 @@ static int eg_canvas_new (int screen, int shadow) {
     memset(c, 0, sizeof(*c));
     c->tex = SDL_CreateTexture(EG_REN, SDL_PIXELFORMAT_RGBA8888,
                                SDL_TEXTUREACCESS_TARGET, EG_W, EG_H);
-    SDL_SetTextureBlendMode(c->tex, SDL_BLENDMODE_BLEND);
+    if (EG_PREMUL_OK == -1) {
+        EG_PREMUL = SDL_ComposeCustomBlendMode(
+            SDL_BLENDFACTOR_ONE, SDL_BLENDFACTOR_ONE_MINUS_SRC_ALPHA, SDL_BLENDOPERATION_ADD,
+            SDL_BLENDFACTOR_ONE, SDL_BLENDFACTOR_ONE_MINUS_SRC_ALPHA, SDL_BLENDOPERATION_ADD);
+        EG_PREMUL_OK = (SDL_SetTextureBlendMode(c->tex, EG_PREMUL) == 0)
+                    && getenv("SNX_NO_PREMUL") == NULL;
+    }
+    if (EG_PREMUL_OK) {
+        SDL_SetTextureBlendMode(c->tex, EG_PREMUL);
+        c->out = c->tex;
+    } else {
+        SDL_SetTextureBlendMode(c->tex, SDL_BLENDMODE_NONE);
+        c->out = SDL_CreateTexture(EG_REN, SDL_PIXELFORMAT_RGBA32,
+                                   SDL_TEXTUREACCESS_STREAMING, EG_W, EG_H);
+        SDL_SetTextureBlendMode(c->out, SDL_BLENDMODE_BLEND);
+    }
     c->screen = screen;
     c->shadow = shadow;
     if (shadow && EG_SHADOW==NULL) {
@@ -248,9 +272,31 @@ static void eg_render (EgCanvas* cv, SDL_Texture* dst, int shadow) {
 
 // The end of a frame: renders the canvases, in the order of creation
 // (a canvas may draw an earlier one), and composes them to the window.
+// Makes `out` of a canvas from its target, when the renderer has no
+// premultiplied blend mode: each color divided by its alpha.
+static void eg_canvas_out (EgCanvas* cv) {
+    if (EG_PREMUL_OK) {
+        return;
+    }
+    static Uint8 px[EG_W*EG_H*4];
+    SDL_RenderReadPixels(EG_REN, NULL, SDL_PIXELFORMAT_RGBA32, px, EG_W*4);
+    for (int i=0; i<EG_W*EG_H; i++) {
+        Uint8* p = &px[i*4];
+        int a = p[3];
+        if (a!=0 && a!=255) {
+            for (int k=0; k<3; k++) {
+                int v = (p[k]*255 + a/2) / a;
+                p[k] = (v > 255) ? 255 : v;
+            }
+        }
+    }
+    SDL_UpdateTexture(cv->out, NULL, px, EG_W*4);
+}
+
 static void eg_frame (void) {
     for (int i=0; i<EG_CVS_N; i++) {
         eg_render(&EG_CVS[i], EG_CVS[i].tex, 0);
+        eg_canvas_out(&EG_CVS[i]);
     }
     SDL_SetRenderTarget(EG_REN, NULL);
     SDL_SetRenderDrawColor(EG_REN, EG_BG.r, EG_BG.g, EG_BG.b, 255);
@@ -267,7 +313,7 @@ static void eg_frame (void) {
             SDL_FRect s = { 1.5f*EG_SCALE, 1.5f*EG_SCALE, r.w, r.h };
             SDL_RenderCopyF(EG_REN, EG_SHADOW, NULL, &s);
         }
-        SDL_RenderCopyF(EG_REN, cv->tex, NULL, &r);
+        SDL_RenderCopyF(EG_REN, cv->out, NULL, &r);
     }
     for (int i=0; i<EG_CVS_N; i++) {
         EG_CVS[i].vs_n = 0;
@@ -281,11 +327,40 @@ static void eg_canvas_draw (int i, double x, double y, SDL_Color c) {
     if (i<0 || i>=EG_CVS_N || i==EG_CUR) {
         return;
     }
-    SDL_Texture* t = EG_CVS[i].tex;
+    SDL_Texture* t = EG_CVS[i].out;
     SDL_FPoint p0 = eg_xy(x, y),       p1 = eg_xy(x+EG_W, y);
     SDL_FPoint p2 = eg_xy(x+EG_W, y+EG_H), p3 = eg_xy(x, y+EG_H);
     eg_vertex(t, p0, c, 0, 0); eg_vertex(t, p1, c, 1, 0); eg_vertex(t, p2, c, 1, 1);
     eg_vertex(t, p0, c, 0, 0); eg_vertex(t, p2, c, 1, 1); eg_vertex(t, p3, c, 0, 1);
+}
+
+// Draws canvas `i` into the current one, except inside the rectangle
+// (x1,y1)-(x2,y2) in canvas coordinates: as `graphics.draw_with_mask`
+// of the original with an inverted rectangular mask, which the menu and
+// the arena use for the stars. The rectangle is in the current transform.
+static void eg_canvas_draw_outside (int i, double x1, double y1, double x2, double y2, SDL_Color c) {
+    if (i<0 || i>=EG_CVS_N || i==EG_CUR) {
+        return;
+    }
+    SDL_Texture* t = EG_CVS[i].out;
+    double xs[4] = { 0, x1, x2, EG_W };
+    double ys[4] = { 0, y1, y2, EG_H };
+    for (int a=0; a<3; a++) {
+        for (int b=0; b<3; b++) {
+            if (a==1 && b==1) {
+                continue;               // the hole
+            }
+            double qx0 = xs[a], qx1 = xs[a+1], qy0 = ys[b], qy1 = ys[b+1];
+            if (qx1<=qx0 || qy1<=qy0) {
+                continue;
+            }
+            float u0 = qx0/EG_W, u1 = qx1/EG_W, v0 = qy0/EG_H, v1 = qy1/EG_H;
+            SDL_FPoint p0 = eg_xy(qx0, qy0), p1 = eg_xy(qx1, qy0);
+            SDL_FPoint p2 = eg_xy(qx1, qy1), p3 = eg_xy(qx0, qy1);
+            eg_vertex(t, p0, c, u0, v0); eg_vertex(t, p1, c, u1, v0); eg_vertex(t, p2, c, u1, v1);
+            eg_vertex(t, p0, c, u0, v0); eg_vertex(t, p2, c, u1, v1); eg_vertex(t, p3, c, u0, v1);
+        }
+    }
 }
 
 ///////////////////////////////////////////////////////////////////////////////
