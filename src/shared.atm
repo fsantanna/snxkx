@@ -1,0 +1,127 @@
+;; What the screens share, as `shared.lua` of the original: canvases,
+;; background, stars, fonts, sounds of the interface, the transition.
+
+;;; CANVASES ;;;
+
+;; As `shared_draw`: the stars in their own canvas, which a screen draws
+;; into the main one; the background; and the main canvas, with its
+;; shadow. Shapes go to MAIN unless a task selects another canvas.
+val STARS = eng.canvas(false, false)
+val BACK  = eng.canvas(true, false)
+val MAIN  = eng.canvas(true, true)
+eng.background(bg@0)
+eng.target(MAIN)
+
+val fat_font   = font("FatPixelFont", 8)
+val pixul_font = font("PixulBrush", 8)
+
+;; The background: a checkerboard of 22-pixel cells and a vertical
+;; gradient, drawn while it lives.
+task Background () {
+    loop on :draw {
+        eng.target(BACK)
+        loop i in (1, 32) {
+            loop j in (1, 18) {
+                if (j%2 == 0) == (i%2 == 1) {
+                    eng.rect2((i-1)*22, (j-1)*22, 22, 22, nil, nil, bg_off)
+                }
+            }
+        }
+        eng.gradient(0, 0, W, H, rgba(128/255, 128/255, 128/255, 0), rgba(0, 0, 0, 0.3))
+        eng.target(MAIN)
+    }
+}
+
+;;; STARS ;;;
+
+val star_image = image("star")
+
+;; Where the stars start: a column left of the screen and a row below.
+val STAR_POSITIONS = do {
+    val ps = []
+    loop i in (-30, H+30) {
+        if (i+30) % 15 == 0 {
+            set ps@+ = [x=-40, y=i]
+        }
+    }
+    loop i in (-30, W) {
+        if (i+30) % 15 == 0 {
+            set ps@+ = [x=i, y=H+40]
+        }
+    }
+    ps
+}
+
+;; A star flies up and right, turning, until it leaves the screen.
+task Star (p) {
+    var x, y = p.x, p.y
+    var r = 0
+    val dr = rfloat(0, math.pi/4)
+    val v  = rfloat(30, 42)
+    par :any {
+        loop us on :clock {
+            val dt = us / 1000000
+            set x += v*math.cos(-math.pi/4)*dt
+            set y += v*math.sin(-math.pi/4)*dt
+            set r += dr*dt
+            until x > W + 64
+        }
+    } with {
+        loop on :draw {
+            eng.target(STARS)
+            draw_image(star_image, x, y, r, 0.35, 0.35, bg@1)
+            eng.target(MAIN)
+        }
+    }
+}
+
+;; Spawns a star every 0.375s, while it lives.
+task Stars () {
+    pin ss = tasks()
+    loop {
+        await 375ms
+        spawn @ss Star(rtable(STAR_POSITIONS))
+    }
+}
+
+;;; SOUNDS ;;;
+
+val ui_hover1      = sound("bamboo_hit_by_lord.ogg")
+val ui_switch1     = sound("Switch.ogg")
+val ui_switch2     = sound("Switch 3.ogg")
+val ui_transition1 = sound("Wind Bolt 8.ogg")
+val ui_transition2 = sound("Wind Bolt 12.ogg")
+val pop1           = sound("Pop sounds 10.ogg")
+val pop2           = sound("467951__benzix2__ui-button-click.ogg")
+
+;;; TRANSITION ;;;
+
+;; As `TransitionEffect`: a circle grows from (x,y) until it covers the
+;; screen, with a text that pops in the center. Then it emits :covered,
+;; so that the screen below changes, and the circle shrinks from the
+;; center. It draws on `:draw` where it lives.
+task Transition (x, y, color, txt) {
+    val st = [ x=x, y=y, rs=0, ts=0 ]
+    val t = text([ [text=txt, font=pixul_font, alignment=:center] ])
+    spawn {
+        loop on :draw {
+            eng.circle(st.x, st.y, st.rs, color)
+            text_draw(t, W/2, H/2, 0, st.ts, st.ts)
+        }
+    }
+    await 250ms
+    spawn {
+        await 100ms
+        await Tween(0.1, st, [ts=1], cubic_in_out)
+    }
+    await Tween(0.6, st, [rs=1.2*W], linear)
+    emit @:global :covered
+    await 300ms
+    set st.x = W/2
+    set st.y = H/2
+    spawn {
+        await 600ms
+        await Tween(0.05, st, [ts=0], cubic_in_out)
+    }
+    await Tween(0.6, st, [rs=0], linear)
+}
