@@ -35,6 +35,7 @@ for t in tst/*.atm tst/*/*.atm; do
             . "./$base.sh"
             set +a
         fi
+        [ -z "$SNX_MUTE" ] && unset SNX_MUTE
         "$ATMOS" "$t"
     ) > "$OUT/$n.got" 2>&1 < /dev/null
     if [ "$UPDATE" = 1 ]; then
