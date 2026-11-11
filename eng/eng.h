@@ -182,11 +182,25 @@ static void eg_canvas_set (int i) {
     }
 }
 
+// The offset of every vertex, so that the renderer covers the pixels
+// that LÖVE covers (measured against LÖVE 11.5 under Xvfb): a pixel
+// whose center is inside a shape (an edge at e starts at pixel
+// ceil(e - 0.5)), and text as if 0.001 further (at 10.4999 it starts at
+// pixel 11). OpenGL covers pixels by their centers too, so it only
+// needs the 0.001 of text. The software renderer floors positions, so
+// it needs 0.499 more. The values are set when the renderer is created
+// (see `main`).
+static float EG_OFF_SHAPE = 0.0f;
+static float EG_OFF_TEXT  = 0.001f;
+static float EG_OFF       = 0.0f;
+
 // Appends a vertex to the current canvas, in a run of the texture.
 static void eg_vertex (SDL_Texture* tex, SDL_FPoint p, SDL_Color c, float u, float v) {
     if (EG_CVS_N == 0) {
         return;
     }
+    p.x += EG_OFF;
+    p.y += EG_OFF;
     EgCanvas* cv = &EG_CVS[EG_CUR];
     if (cv->vs_n == cv->vs_max) {
         cv->vs_max = cv->vs_max ? cv->vs_max*2 : 4096;
@@ -450,6 +464,241 @@ static void eg_gradient (double x, double y, double w, double h, SDL_Color c1, S
 }
 
 ///////////////////////////////////////////////////////////////////////////////
+// FONTS
+///////////////////////////////////////////////////////////////////////////////
+
+// A font: the printable ASCII glyphs in one texture, as rendered by
+// FreeType (through SDL_ttf). As LÖVE 11, the height of the font is the
+// line height of FreeType, a glyph is drawn with its left bearing from
+// the pen and its top `maxy` above the baseline, which is at the ascent
+// from the top, and the pen moves by the advance (no kerning).
+#define EG_GLYPH0 32
+#define EG_GLYPHS 95
+typedef struct {
+    SDL_Texture* tex;
+    int          tw, th;
+    SDL_Rect     box[EG_GLYPHS];    // in the texture
+    int          ox[EG_GLYPHS];     // the offset of the box from the pen
+    int          oy[EG_GLYPHS];
+    int          adv[EG_GLYPHS];
+    int          h;                 // the height of the font
+} EgFont;
+
+#define EG_FONTS 16
+static EgFont EG_FNTS[EG_FONTS];
+static int    EG_FNTS_N = 0;
+
+// A glyph alone, cropped to the pixels it covers.
+static SDL_Surface* eg_glyph (TTF_Font* f, Uint32 ch) {
+    SDL_Color white = { 255, 255, 255, 255 };
+    SDL_Surface* g = TTF_RenderGlyph32_Blended(f, ch, white);
+    if (g == NULL) {
+        return NULL;
+    }
+    SDL_Surface* s = SDL_ConvertSurfaceFormat(g, SDL_PIXELFORMAT_RGBA32, 0);
+    SDL_FreeSurface(g);
+    int x0 = s->w, y0 = s->h, x1 = -1, y1 = -1;
+    for (int y=0; y<s->h; y++) {
+        Uint8* row = (Uint8*)s->pixels + y*s->pitch;
+        for (int x=0; x<s->w; x++) {
+            if (row[x*4+3] != 0) {
+                if (x < x0) x0 = x;
+                if (x > x1) x1 = x;
+                if (y < y0) y0 = y;
+                if (y > y1) y1 = y;
+            }
+        }
+    }
+    if (x1 < 0) {
+        SDL_FreeSurface(s);
+        return NULL;
+    }
+    SDL_Surface* c = SDL_CreateRGBSurfaceWithFormat(0, x1-x0+1, y1-y0+1, 32, SDL_PIXELFORMAT_RGBA32);
+    SDL_Rect r = { x0, y0, x1-x0+1, y1-y0+1 };
+    SDL_SetSurfaceBlendMode(s, SDL_BLENDMODE_NONE);
+    SDL_BlitSurface(s, &r, c, NULL);
+    SDL_FreeSurface(s);
+    return c;
+}
+
+static int eg_font_new (const char* path, int size) {
+    if (path==NULL || EG_FNTS_N==EG_FONTS) {
+        return -1;
+    }
+    TTF_Font* f = TTF_OpenFont(path, size);
+    if (f == NULL) {
+        fprintf(stderr, "font : %s : %s\n", path, TTF_GetError());
+        return -1;
+    }
+    EgFont* ft = &EG_FNTS[EG_FNTS_N];
+    memset(ft, 0, sizeof(*ft));
+    ft->h = TTF_FontLineSkip(f);
+    int asc = TTF_FontAscent(f);
+    SDL_Surface* gs[EG_GLYPHS];
+    int w = 0;
+    for (int i=0; i<EG_GLYPHS; i++) {
+        int minx, maxx, miny, maxy, adv;
+        TTF_GlyphMetrics32(f, EG_GLYPH0+i, &minx, &maxx, &miny, &maxy, &adv);
+        ft->adv[i] = adv;
+        ft->ox[i]  = minx;
+        ft->oy[i]  = asc - maxy;
+        gs[i] = (i == 0) ? NULL : eg_glyph(f, EG_GLYPH0+i);
+        if (gs[i] != NULL) {
+            w += gs[i]->w + 1;
+            if (gs[i]->h > ft->th) {
+                ft->th = gs[i]->h;
+            }
+        }
+    }
+    ft->tw = (w > 0) ? w : 1;
+    if (ft->th == 0) {
+        ft->th = 1;
+    }
+    SDL_Surface* atlas = SDL_CreateRGBSurfaceWithFormat(0, ft->tw, ft->th, 32, SDL_PIXELFORMAT_RGBA32);
+    SDL_FillRect(atlas, NULL, SDL_MapRGBA(atlas->format, 255, 255, 255, 0));
+    int x = 0;
+    for (int i=0; i<EG_GLYPHS; i++) {
+        if (gs[i] == NULL) {
+            continue;
+        }
+        SDL_Rect r = { x, 0, gs[i]->w, gs[i]->h };
+        SDL_SetSurfaceBlendMode(gs[i], SDL_BLENDMODE_NONE);
+        SDL_BlitSurface(gs[i], NULL, atlas, &r);
+        ft->box[i] = r;
+        x += gs[i]->w + 1;
+        SDL_FreeSurface(gs[i]);
+    }
+    ft->tex = SDL_CreateTextureFromSurface(EG_REN, atlas);
+    SDL_SetTextureBlendMode(ft->tex, SDL_BLENDMODE_BLEND);
+    SDL_FreeSurface(atlas);
+    TTF_CloseFont(f);
+    return EG_FNTS_N++;
+}
+
+static EgFont* eg_font (int i) {
+    return (i>=0 && i<EG_FNTS_N) ? &EG_FNTS[i] : NULL;
+}
+
+static int eg_text_width (int fi, const char* s) {
+    EgFont* f = eg_font(fi);
+    int w = 0;
+    for (; f!=NULL && s!=NULL && *s; s++) {
+        int i = (unsigned char)*s - EG_GLYPH0;
+        if (i>=0 && i<EG_GLYPHS) {
+            w += f->adv[i];
+        }
+    }
+    return w;
+}
+
+// Prints a text as `love.graphics.print(s, x, y, r, sx, sy, ox, oy)`.
+static void eg_print (int fi, const char* s, double x, double y, double r,
+                      double sx, double sy, double ox, double oy, SDL_Color c) {
+    EgFont* f = eg_font(fi);
+    if (f==NULL || s==NULL) {
+        return;
+    }
+    if (EG_TOP+1 < EG_STACK) {
+        EG_MATS[EG_TOP+1] = EG_MATS[EG_TOP];
+        EG_TOP++;
+    }
+    eg_translate(x, y);
+    eg_rotate(r);
+    eg_scale(sx, sy);
+    eg_translate(-ox, -oy);
+    EG_OFF = EG_OFF_TEXT;
+    double px = 0;
+    for (; *s; s++) {
+        int i = (unsigned char)*s - EG_GLYPH0;
+        if (i<0 || i>=EG_GLYPHS) {
+            continue;
+        }
+        SDL_Rect b = f->box[i];
+        if (b.w > 0) {
+            float u0 = (float)b.x/f->tw, u1 = (float)(b.x+b.w)/f->tw;
+            float v0 = (float)b.y/f->th, v1 = (float)(b.y+b.h)/f->th;
+            double gx = px + f->ox[i], gy = f->oy[i];
+            SDL_FPoint p0 = eg_xy(gx, gy),         p1 = eg_xy(gx+b.w, gy);
+            SDL_FPoint p2 = eg_xy(gx+b.w, gy+b.h), p3 = eg_xy(gx, gy+b.h);
+            eg_vertex(f->tex, p0, c, u0, v0);
+            eg_vertex(f->tex, p1, c, u1, v0);
+            eg_vertex(f->tex, p2, c, u1, v1);
+            eg_vertex(f->tex, p0, c, u0, v0);
+            eg_vertex(f->tex, p2, c, u1, v1);
+            eg_vertex(f->tex, p3, c, u0, v1);
+        }
+        px += f->adv[i];
+    }
+    EG_OFF = EG_OFF_SHAPE;
+    eg_pop();
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// IMAGES
+///////////////////////////////////////////////////////////////////////////////
+
+typedef struct {
+    char*        path;
+    SDL_Texture* tex;
+    int          w, h;
+} EgImg;
+
+#define EG_IMGS 256
+static EgImg EG_IMGS_[EG_IMGS];
+static int   EG_IMGS_N = 0;
+
+// An image by path, loaded once.
+static int eg_img (const char* path) {
+    if (path == NULL) {
+        return -1;
+    }
+    for (int i=0; i<EG_IMGS_N; i++) {
+        if (!strcmp(EG_IMGS_[i].path, path)) {
+            return i;
+        }
+    }
+    if (EG_IMGS_N == EG_IMGS) {
+        return -1;
+    }
+    SDL_Texture* t = IMG_LoadTexture(EG_REN, path);
+    if (t == NULL) {
+        fprintf(stderr, "image : %s : %s\n", path, IMG_GetError());
+        return -1;
+    }
+    EgImg* im = &EG_IMGS_[EG_IMGS_N];
+    im->path = strdup(path);
+    im->tex = t;
+    SDL_SetTextureBlendMode(t, SDL_BLENDMODE_BLEND);
+    SDL_QueryTexture(t, NULL, NULL, &im->w, &im->h);
+    return EG_IMGS_N++;
+}
+
+static int eg_img_dim (int i, int w) {
+    return (i>=0 && i<EG_IMGS_N) ? (w ? EG_IMGS_[i].w : EG_IMGS_[i].h) : 0;
+}
+
+// Draws an image centered at (x,y), as `Image:draw` of the original.
+static void eg_img_draw (int i, double x, double y, double r, double sx, double sy, SDL_Color c) {
+    if (i<0 || i>=EG_IMGS_N) {
+        return;
+    }
+    EgImg* im = &EG_IMGS_[i];
+    if (EG_TOP+1 < EG_STACK) {
+        EG_MATS[EG_TOP+1] = EG_MATS[EG_TOP];
+        EG_TOP++;
+    }
+    eg_translate(x, y);
+    eg_rotate(r);
+    eg_scale(sx, sy);
+    double x0 = -im->w/2.0, y0 = -im->h/2.0;
+    SDL_FPoint p0 = eg_xy(x0, y0),             p1 = eg_xy(x0+im->w, y0);
+    SDL_FPoint p2 = eg_xy(x0+im->w, y0+im->h), p3 = eg_xy(x0, y0+im->h);
+    eg_vertex(im->tex, p0, c, 0, 0); eg_vertex(im->tex, p1, c, 1, 0); eg_vertex(im->tex, p2, c, 1, 1);
+    eg_vertex(im->tex, p0, c, 0, 0); eg_vertex(im->tex, p2, c, 1, 1); eg_vertex(im->tex, p3, c, 0, 1);
+    eg_pop();
+}
+
+///////////////////////////////////////////////////////////////////////////////
 // DRIVER
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -546,6 +795,8 @@ static AStatus eg_script (const char* var, int tick) {
 //   SNX_INPUT, SNX_SHOT  the test script (see `eg_script`)
 //   SNX_MUTE=1         no audio
 //   SNX_SCALE=n        window pixels per game pixel (default 2)
+//   SNX_RENDERER=name  a render driver of SDL (default: software in test
+//                      mode, the best one otherwise)
 int main (int argc, char** argv) {
     if (SDL_Init(SDL_INIT_VIDEO|SDL_INIT_AUDIO) != 0) {
         SDL_Init(SDL_INIT_VIDEO);
@@ -568,14 +819,33 @@ int main (int argc, char** argv) {
     EG_WIN = SDL_CreateWindow("SNKRX", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
                               EG_W*EG_SCALE, EG_H*EG_SCALE, 0);
     if (EG_WIN != NULL) {
-        EG_REN = SDL_CreateRenderer(EG_WIN, -1,
-            EG_TEST ? SDL_RENDERER_SOFTWARE|SDL_RENDERER_TARGETTEXTURE : 0);
+        // the test mode renders in software, so that screenshots repeat
+        const char* r = getenv("SNX_RENDERER");
+        if (r == NULL) {
+            r = EG_TEST ? "software" : NULL;
+        }
+        if (r != NULL) {
+            SDL_SetHint(SDL_HINT_RENDER_DRIVER, r);
+        }
+        EG_REN = SDL_CreateRenderer(EG_WIN, -1, 0);
     }
     if (EG_REN == NULL) {
         fprintf(stderr, "sdl : %s\n", SDL_GetError());
         exit(1);
     }
     SDL_SetRenderDrawBlendMode(EG_REN, SDL_BLENDMODE_BLEND);
+    {
+        SDL_RendererInfo info;
+        SDL_GetRendererInfo(EG_REN, &info);
+        if (!strcmp(info.name, "software")) {
+            EG_OFF_SHAPE = 0.499f;
+            EG_OFF_TEXT  = 0.501f;
+        }
+        EG_OFF = EG_OFF_SHAPE;
+        if (getenv("SNX_RENDERER_INFO") != NULL) {
+            fprintf(stderr, "renderer : %s\n", info.name);
+        }
+    }
 
     atm_init(argc, argv);
     AStatus st = atm_main();
