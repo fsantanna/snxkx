@@ -1,0 +1,14 @@
+;; The ramps of colors, compared with the original (values printed by
+;; ColorRamp of the original on LÖVE 11.5, in `color.out`).
+
+include "../../eng/eng.atm"
+include "../../eng/color.atm"
+
+loop _, c in [hex("#303030"), hex("#dadada"), hex("#facf00"), hex("#e91d39"), hex("#4778ba")] {
+    val r = ramp(c)
+    val out = [string.format("#%06x", c >> 8)]
+    loop _, i in [-10, -5, -2, -1, 0, 1, 3, 5, 10] {
+        set out@+ = string.format("%08x", r@(i))
+    }
+    print(vector.join(out, " "))
+}

@@ -1,0 +1,87 @@
+;; The colors of the original (`shared_init` and `ColorRamp`): each color
+;; has a ramp from -10 to 10, lighter or darker by 0.025 of lightness
+;; (in HSL) per step. Colors are integers 0xRRGGBBAA (see `rgba`).
+
+func clamp (v, lo, hi) {
+    math.max(lo, math.min(hi, v))
+}
+
+func to_hsl (r, g, b) {
+    val mx = math.max(r, g, b)
+    val mn = math.min(r, g, b)
+    val l = (mx + mn) / 2
+    if mx == mn {
+        return 0, 0, l
+    }
+    val d = mx - mn
+    val s = if l > 0.5 => d/(2 - mx - mn) => d/(mx + mn)
+    val h = ifs {
+        mx == r => (g - b)/d + (if g < b => 6 => 0)
+        mx == g => (b - r)/d + 2
+        else    => (r - g)/d + 4
+    }
+    return h/6, s, l
+}
+
+func to_rgb (h, s, l) {
+    if s == 0 {
+        val v = clamp(l, 0, 1)
+        return v, v, v
+    }
+    val to = func (p, q, t0) {
+        val t = ifs {
+            t0 < 0 => t0 + 1
+            t0 > 1 => t0 - 1
+            else   => t0
+        }
+        ifs {
+            t < 0.16667 => p + (q - p)*6*t
+            t < 0.5     => q
+            t < 0.66667 => p + (q - p)*(0.66667 - t)*6
+            else        => p
+        }
+    }
+    val q = if l < 0.5 => l*(1 + s) => l + s - l*s
+    val p = 2*l - q
+    return clamp(to(p, q, h + 0.33334), 0, 1), clamp(to(p, q, h), 0, 1),
+           clamp(to(p, q, h - 0.33334), 0, 1)
+}
+
+;; A color lightened by v, as `Color:lighten(v)` (negative darkens).
+func lighten (c, v) {
+    val r, g, b, a = comps(c)
+    val h, s, l = to_hsl(r, g, b)
+    val r2, g2, b2 = to_rgb(h, s, l + v)
+    rgba(r2, g2, b2, a)
+}
+
+;; A color with alpha a.
+func alpha (c, a) {
+    (c & ~0xFF) | math.floor(clamp(a, 0, 1)*255 + 0.5)
+}
+
+;; The ramp of a color, as `ColorRamp(color, 0.025)`.
+func ramp (c) {
+    val t = []
+    loop i in (-10, 10) {
+        set t@(i) = if i == 0 => c => lighten(c, i*0.025)
+    }
+    t
+}
+
+val white   = ramp(rgba(1, 1, 1, 1))
+val black   = ramp(rgba(0, 0, 0, 1))
+val bg      = ramp(hex("#303030"))
+val fg      = ramp(hex("#dadada"))
+val fg_alt  = ramp(hex("#b0a89f"))
+val yellow  = ramp(hex("#facf00"))
+val orange  = ramp(hex("#f07021"))
+val blue    = ramp(hex("#019bd6"))
+val green   = ramp(hex("#8bbf40"))
+val red     = ramp(hex("#e91d39"))
+val purple  = ramp(hex("#8e559e"))
+val blue2   = ramp(hex("#4778ba"))
+val yellow2 = ramp(hex("#f59f10"))
+
+val bg_off = rgba(46/255, 46/255, 46/255, 1)
+val invisible = rgba(1, 1, 1, 0)
