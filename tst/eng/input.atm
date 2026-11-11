@@ -1,0 +1,21 @@
+;; The events of the engine, from the test script: mouse, keys, time.
+
+include "../../eng/eng.atm"
+
+spawn {
+    loop e on :mouse {
+        print(eng.tick(), e.tag, e.x, e.y, e.but)
+    }
+}
+spawn {
+    loop e on :key {
+        print(eng.tick(), e.tag, e.name)
+    }
+}
+spawn {
+    await 1s
+    print(eng.tick(), "1s")
+    await 500ms
+    print(eng.tick(), "1.5s")
+}
+await(false)

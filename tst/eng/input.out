@@ -1,0 +1,7 @@
+3	mouse.mv	10.5	20.0	0
+4	mouse.dn	10.5	20.0	1
+5	mouse.up	10.5	20.0	1
+6	key.dn	Left
+7	key.up	Left
+60	1s
+90	1.5s
