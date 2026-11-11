@@ -1,0 +1,3 @@
+;; The game from the start, by script: the menu, a click on "arena run",
+;; the transition, the next screen.
+include "../../main.atm"

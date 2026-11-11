@@ -1,0 +1,48 @@
+;; SNKRX in Atmos: the screens, one after the other, under the
+;; transitions between them.
+
+include "eng/eng.atm"
+include "eng/random.atm"
+include "eng/color.atm"
+include "eng/anim.atm"
+include "eng/text.atm"
+include "src/shared.atm"
+include "src/button.atm"
+include "src/menu.atm"
+
+;; A screen that is not ported yet: its name in the middle.
+task Todo (name) {
+    val t = text([ [text="[fg]" ++ name, font=pixul_font, alignment=:center] ])
+    loop on :draw {
+        text_draw(t, W/2, H/2)
+    }
+}
+
+spawn Background()
+
+par {
+    ;; the screens: each one runs until it asks for the next one, and the
+    ;; transition covers it
+    var screen = [ Menu, nil, "mainmenu" ]
+    loop {
+        val next = do {
+            trace("go", screen@2)
+            pin s = spawn (screen@0)(screen@1)
+            val e = await <:goto || s>
+            if e == :quit {
+                break
+            }
+            await :covered
+            e
+        }
+        set screen = match next.screen {
+            :buy_screen => [ Todo, "shop", "buy_screen" ]
+            else => [ Menu, nil, "mainmenu" ]
+        }
+    }
+} with {
+    ;; the transitions, over the screens
+    loop e on :goto {
+        await Transition(e.x, e.y, e.color, e.text)
+    }
+}
