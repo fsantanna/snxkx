@@ -1,0 +1,20 @@
+;; Sounds of the original, with a pitch and a volume, on the dummy
+;; driver. (Game time runs faster than the device in test mode, so only
+;; what does not depend on the clock is checked.)
+
+include "../../eng/eng.atm"
+
+val s = sound("Click.ogg")
+print(string.format("%.3f", sound_len(s)))
+val a = play(s)
+val b = play(s, [pitch=1.5, volume=0.5])
+val c = play(s, [loop=true])
+print(playing(a), playing(b), playing(c))
+stop(a)
+stop(b)
+print(playing(a), playing(b), playing(c))
+await 1s
+stop(c)
+print(playing(c))
+val d = play(s, [pitch=0.8])
+print(playing(d), playing(c))

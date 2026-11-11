@@ -699,6 +699,175 @@ static void eg_img_draw (int i, double x, double y, double r, double sx, double 
 }
 
 ///////////////////////////////////////////////////////////////////////////////
+// SOUNDS
+///////////////////////////////////////////////////////////////////////////////
+
+// A sound is loaded once by path, whole, as the `static` sources of the
+// original. An instance plays in a channel of SDL_mixer, with a volume
+// and a pitch. SDL_mixer has no pitch, so an instance with a pitch other
+// than 1 plays a copy of the samples, resampled once when it starts.
+// The copy is released by the main thread after the channel finishes.
+
+typedef struct {
+    char*      path;
+    Mix_Chunk* chk;
+} EgSnd;
+
+#define EG_SNDS 256
+static EgSnd EG_SNDS_[EG_SNDS];
+static int   EG_SNDS_N = 0;
+
+#define EG_CHANS 64
+static Mix_Chunk* EG_OWN[EG_CHANS];         // a resampled copy, or NULL
+static int        EG_GEN[EG_CHANS];         // the instance in the channel
+static volatile int EG_DONE[EG_CHANS];      // finished, set by SDL_mixer
+
+static void eg_chan_done (int ch) {
+    if (ch>=0 && ch<EG_CHANS) {
+        EG_DONE[ch] = 1;
+    }
+}
+
+static void eg_snd_gc (void) {
+    for (int i=0; i<EG_CHANS; i++) {
+        if (EG_DONE[i]) {
+            EG_DONE[i] = 0;
+            if (EG_OWN[i] != NULL && !Mix_Playing(i)) {
+                SDL_free(EG_OWN[i]->abuf);
+                SDL_free(EG_OWN[i]);
+                EG_OWN[i] = NULL;
+            }
+        }
+    }
+}
+
+static int eg_snd (const char* path) {
+    if (path == NULL) {
+        return -1;
+    }
+    for (int i=0; i<EG_SNDS_N; i++) {
+        if (!strcmp(EG_SNDS_[i].path, path)) {
+            return i;
+        }
+    }
+    if (EG_SNDS_N == EG_SNDS) {
+        return -1;
+    }
+    Mix_Chunk* c = NULL;
+    if (EG_SND) {
+        c = Mix_LoadWAV(path);
+        if (c == NULL) {
+            fprintf(stderr, "sound : %s : %s\n", path, Mix_GetError());
+            return -1;
+        }
+    }
+    EG_SNDS_[EG_SNDS_N].path = strdup(path);
+    EG_SNDS_[EG_SNDS_N].chk  = c;
+    return EG_SNDS_N++;
+}
+
+// The samples of a chunk resampled for a pitch, by linear interpolation
+// (16-bit stereo, the format of the device).
+static Mix_Chunk* eg_resample (Mix_Chunk* src, double pitch) {
+    Sint16* in = (Sint16*) src->abuf;
+    int n = src->alen / 4;                  // frames of two samples
+    int m = (int)(n / pitch);
+    if (m < 1) {
+        return NULL;
+    }
+    Sint16* out = SDL_malloc(m * 4);
+    for (int i=0; i<m; i++) {
+        double p = i * pitch;
+        int    j = (int) p;
+        double t = p - j;
+        int    k = (j+1 < n) ? j+1 : j;
+        for (int c=0; c<2; c++) {
+            out[i*2+c] = (Sint16)(in[j*2+c]*(1-t) + in[k*2+c]*t);
+        }
+    }
+    Mix_Chunk* chk = SDL_malloc(sizeof(Mix_Chunk));
+    chk->allocated = 0;
+    chk->abuf = (Uint8*) out;
+    chk->alen = m * 4;
+    chk->volume = MIX_MAX_VOLUME;
+    return chk;
+}
+
+// Plays sound `i` with a volume in [0,1] and a pitch; loops forever if
+// `loop`. Returns the instance (channel and generation), or -1.
+static int eg_snd_play (int i, double vol, double pitch, int loop) {
+    if (!EG_SND || i<0 || i>=EG_SNDS_N || EG_SNDS_[i].chk==NULL) {
+        return -1;
+    }
+    eg_snd_gc();
+    Mix_Chunk* c = EG_SNDS_[i].chk;
+    Mix_Chunk* own = NULL;
+    if (pitch>0 && fabs(pitch-1) > 1e-6) {
+        int freq, chans;
+        Uint16 fmt;
+        Mix_QuerySpec(&freq, &fmt, &chans);
+        if (fmt==AUDIO_S16SYS && chans==2) {
+            own = eg_resample(c, pitch);
+            if (own != NULL) {
+                c = own;
+            }
+        }
+    }
+    int ch = Mix_PlayChannel(-1, c, loop ? -1 : 0);
+    if (ch<0 || ch>=EG_CHANS) {
+        if (own != NULL) {
+            SDL_free(own->abuf);
+            SDL_free(own);
+        }
+        return -1;
+    }
+    if (EG_OWN[ch] != NULL) {           // the earlier copy of the channel
+        SDL_free(EG_OWN[ch]->abuf);
+        SDL_free(EG_OWN[ch]);
+    }
+    EG_OWN[ch] = own;
+    EG_DONE[ch] = 0;
+    Mix_Volume(ch, (int)(MIX_MAX_VOLUME * (vol<0 ? 0 : vol>1 ? 1 : vol)));
+    EG_GEN[ch]++;
+    return ch | (EG_GEN[ch] << 8);
+}
+
+static int eg_snd_chan (int h) {
+    int ch = h & 0xFF;
+    return (h>=0 && ch<EG_CHANS && EG_GEN[ch]==(h>>8)) ? ch : -1;
+}
+
+static int eg_snd_playing (int h) {
+    int ch = eg_snd_chan(h);
+    return EG_SND && ch>=0 && Mix_Playing(ch);
+}
+
+static void eg_snd_stop (int h) {
+    int ch = eg_snd_chan(h);
+    if (EG_SND && ch >= 0) {
+        Mix_HaltChannel(ch);
+    }
+}
+
+static void eg_snd_volume (int h, double vol) {
+    int ch = eg_snd_chan(h);
+    if (EG_SND && ch >= 0) {
+        Mix_Volume(ch, (int)(MIX_MAX_VOLUME * (vol<0 ? 0 : vol>1 ? 1 : vol)));
+    }
+}
+
+// The length of sound `i`, in seconds.
+static double eg_snd_len (int i) {
+    if (!EG_SND || i<0 || i>=EG_SNDS_N || EG_SNDS_[i].chk==NULL) {
+        return 0;
+    }
+    int freq, chans;
+    Uint16 fmt;
+    Mix_QuerySpec(&freq, &fmt, &chans);
+    return (double)EG_SNDS_[i].chk->alen / (freq * chans * 2);
+}
+
+///////////////////////////////////////////////////////////////////////////////
 // DRIVER
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -805,7 +974,8 @@ int main (int argc, char** argv) {
     EG_SND = getenv("SNX_MUTE")==NULL &&
              (Mix_OpenAudio(44100, MIX_DEFAULT_FORMAT, 2, 1024) == 0);
     if (EG_SND) {
-        Mix_AllocateChannels(64);
+        Mix_AllocateChannels(EG_CHANS);
+        Mix_ChannelFinished(eg_chan_done);
     }
     int frames = -1;
     if (getenv("SNX_FRAMES") != NULL) {
@@ -929,7 +1099,17 @@ int main (int argc, char** argv) {
     }
     atm_quit();
     if (EG_SND) {
+        Mix_HaltChannel(-1);
         Mix_CloseAudio();
+        for (int i=0; i<EG_CHANS; i++) {
+            if (EG_OWN[i] != NULL) {
+                SDL_free(EG_OWN[i]->abuf);
+                SDL_free(EG_OWN[i]);
+            }
+        }
+        for (int i=0; i<EG_SNDS_N; i++) {
+            Mix_FreeChunk(EG_SNDS_[i].chk);
+        }
     }
     TTF_Quit();
     SDL_Quit();

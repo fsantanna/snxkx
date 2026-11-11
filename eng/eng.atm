@@ -163,3 +163,39 @@ func draw_image (img, x, y, r, sx, sy, color) {
     val i = img.i
     `eg_img_draw(eg_int($i), eg_dbl($x), eg_dbl($y), eg_dbl($r), a_isnum($sx) ? a_dbl($sx) : 1, a_isnum($sy) ? a_dbl($sy) : (a_isnum($sx) ? a_dbl($sx) : 1), eg_color($color));`
 }
+
+;;; SOUNDS ;;;
+
+;; The volumes of the tags of sounds of the original (`sfx`, `music`),
+;; which multiply the volume of each instance.
+val VOLUME = [ sfx=0.5, music=0.5 ]
+
+;; A sound of the original by file name, with its tag, as `Sound(...)`.
+func sound (file, tag) {
+    val p = ASSETS ++ "sounds/" ++ file
+    val i = `:number eg_snd(eg_cstr($p))`
+    assert(i >= 0, "sound : " ++ file)
+    :Sound [ i=i, kind=(tag || :sfx) ]
+}
+
+;; Plays a sound, as `sound:play{pitch=, volume=}`: an instance.
+func play (snd, opts) {
+    val i = snd.i
+    val v = (opts && opts.volume || 1) * VOLUME@(snd.kind)
+    val p = opts && opts.pitch || 1
+    val l = opts && opts.loop
+    `:number eg_snd_play(eg_int($i), eg_dbl($v), eg_dbl($p), a_truthy($l))`
+}
+
+func playing (inst) {
+    `:boolean eg_snd_playing(eg_int($inst))`
+}
+
+func stop (inst) {
+    `eg_snd_stop(eg_int($inst));`
+}
+
+func sound_len (snd) {
+    val i = snd.i
+    `:number.float eg_snd_len(eg_int($i))`
+}
