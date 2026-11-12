@@ -8,8 +8,9 @@
 ;;
 ;;      "[wavy_mid, fg]shop [fg]- gold: [yellow]3"
 ;;
-;; A tag is a color of the palette or a wave. The original also has tags
-;; with timers (`cbyc`), which belong to the screens that use them.
+;; A tag is a color of the palette or a wave. A character may also have
+;; its own `color`, over its tags: the tags with timers of the original
+;; (`cbyc`) are tasks that set it (see `Cbyc`).
 
 ;; The colors of the tags, by name.
 val TAG_COLORS = [
@@ -127,11 +128,11 @@ func text_draw (t, x, y, r, sx, sy) {
     val time = eng.tick() / 60
     loop _, line in t.lines {
         loop i, c in line.chars {
-            var color = white@0
+            var color = c.color || white@0
             var oy = 0
             loop _, tag in c.tags {
                 val k = TAG_COLORS@(tag)
-                if k {
+                if k && !c.color {
                     set color = k
                 }
                 val w = TAG_WAVES@(tag)

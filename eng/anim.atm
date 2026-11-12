@@ -103,3 +103,13 @@ task UISprings (...) {
         }
     }
 }
+
+;; Waits `s` seconds of real time (the game time may be slowed down or
+;; stopped, as the arena does when it ends).
+task WaitReal (s) {
+    var timer = 0
+    loop e on :tick {
+        set timer += e.us / 1000000
+        until timer > s
+    }
+}

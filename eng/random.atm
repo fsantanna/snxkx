@@ -25,3 +25,27 @@ func rtable (t) {
 func rbool (chance) {
     math.random(1, 1000) < 10*(chance || 50)
 }
+
+;; An index of a vector of weights, as `random:weighted_pick(...)`
+;; (indexes from 0).
+func rweighted (ws) {
+    var total = 0
+    loop _, w in ws {
+        set total += w
+    }
+    var t = rfloat(0, total)
+    var pick = nil
+    loop i, w in ws {
+        if t < w {
+            set pick = i
+            break
+        }
+        set t -= w
+    }
+    pick
+}
+
+;; Removes and returns a random element, as `random:table_remove(t)`.
+func rtable_remove (t) {
+    vector.remove(t, math.random(#t))
+}
