@@ -8,26 +8,6 @@ func new_run () {
     [ level=1, loop=0, gold=3, units=[], passives=[], shop_level=1, shop_xp=0 ]
 }
 
-;; The shop, until it is ported: the level and the gold, and a click
-;; starts the level with a default snake.
-task Shop0 (run) {
-    if #run.units == 0 {
-        set run.units = [["vagrant", 1], ["swordsman", 1], ["archer", 1]]
-    }
-    val t = text([
-        [text="[fg]shop - level " ++ tostring(run.level) ++ ", gold " ++ tostring(run.gold), font=pixul_font, alignment=:center],
-        [text="[bg10](click to start)", font=pixul_font, alignment=:center],
-    ])
-    spawn {
-        loop on :draw {
-            text_draw(t, W/2, H/2)
-        }
-    }
-    await :mouse.dn
-    emit @:global :goto [ screen=:arena, x=W/2, y=H/2, color=fg@0, text="[wavy, bg]level " ++ tostring(run.level) ]
-    await(false)
-}
-
 ;; The arena of the level of the run.
 task Play (run) {
     val A = new_arena(run.level)
@@ -62,12 +42,12 @@ par {
                 if next.counting {
                     set run.level += 1
                 }
-                [ Shop0, run, "buy_screen" ]
+                [ Shop, run, "buy_screen" ]
             }
             :arena => [ Play, run, "arena" ]
             :restart => do {
                 set run = new_run()
-                [ Shop0, run, "buy_screen" ]
+                [ Shop, run, "buy_screen" ]
             }
             else => [ Menu, nil, "mainmenu" ]
         }
