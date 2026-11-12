@@ -204,13 +204,18 @@ static void pw_set (int b, int what, double x, double y) {
 static int PW_EV_N[4];
 static int PW_EV_A[4][PW_EVTS];
 static int PW_EV_B[4][PW_EVTS];
+// for a contact begin: the normal (from a to b) and a point, in pixels,
+// as `contact:getNormal()` and `contact:getPositions()` of LÖVE
+static float PW_EV_NX[PW_EVTS], PW_EV_NY[PW_EVTS];
+static float PW_EV_PX[PW_EVTS], PW_EV_PY[PW_EVTS];
 
-static void pw_ev (int k, int a, int b) {
+static int pw_ev (int k, int a, int b) {
     if (a>=0 && b>=0 && PW_EV_N[k] < PW_EVTS) {
         PW_EV_A[k][PW_EV_N[k]] = a;
         PW_EV_B[k][PW_EV_N[k]] = b;
-        PW_EV_N[k]++;
+        return PW_EV_N[k]++;
     }
+    return -1;
 }
 
 // A step of the world, as `World:update(dt)` of LÖVE.
@@ -223,7 +228,20 @@ static void pw_step (double dt) {
     b2World_Step(PW_WORLD, (float)dt, 4);
     b2ContactEvents ce = b2World_GetContactEvents(PW_WORLD);
     for (int i=0; i<ce.beginCount; i++) {
-        pw_ev(0, pw_of_shape(ce.beginEvents[i].shapeIdA), pw_of_shape(ce.beginEvents[i].shapeIdB));
+        b2ContactBeginTouchEvent* e = &ce.beginEvents[i];
+        int j = pw_ev(0, pw_of_shape(e->shapeIdA), pw_of_shape(e->shapeIdB));
+        if (j >= 0) {
+            PW_EV_NX[j] = e->manifold.normal.x;
+            PW_EV_NY[j] = e->manifold.normal.y;
+            if (e->manifold.pointCount > 0) {
+                PW_EV_PX[j] = e->manifold.points[0].point.x * PW_M;
+                PW_EV_PY[j] = e->manifold.points[0].point.y * PW_M;
+            } else {
+                b2Vec2 p = b2Body_GetPosition(b2Shape_GetBody(e->shapeIdA));
+                PW_EV_PX[j] = p.x * PW_M;
+                PW_EV_PY[j] = p.y * PW_M;
+            }
+        }
     }
     for (int i=0; i<ce.endCount; i++) {
         pw_ev(1, pw_of_shape(ce.endEvents[i].shapeIdA), pw_of_shape(ce.endEvents[i].shapeIdB));

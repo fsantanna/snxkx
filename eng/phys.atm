@@ -5,7 +5,11 @@
 ;; A world has tags of collision. Each body has a tag. After each step,
 ;; `phys_step` emits, to the task that calls it and the tasks inside it:
 ;;
-;;      :collision.enter [b, other]   two bodies touch (once for each)
+;;      :collision.enter [b, other, nx, ny, x, y]
+;;                                    two bodies touch (once for each),
+;;                                    with the normal and a point of the
+;;                                    contact, as `contact:getNormal()`
+;;                                    and `contact:getPositions()`
 ;;      :collision.exit  [b, other]   they stop touching
 ;;      :trigger.enter   [b, other]   the sensor of b overlaps other
 ;;      :trigger.exit    [b, other]   the overlap ends
@@ -144,14 +148,20 @@ func phys_step (w, dt) {
         loop i in n {
             val a = `:number PW_EV_A[eg_int($k)][eg_int($i)]`
             val b = `:number PW_EV_B[eg_int($k)][eg_int($i)]`
+            val e = if k == 0 => [
+                nx = `:number.float PW_EV_NX[eg_int($i)]`,
+                ny = `:number.float PW_EV_NY[eg_int($i)]`,
+                x  = `:number.float PW_EV_PX[eg_int($i)]`,
+                y  = `:number.float PW_EV_PY[eg_int($i)]`,
+            ] => []
             val ob = w.objs@(b)
             if w.objs@(a) && ob {
-                emit tagged(names@(k), [b=a, other=ob])
+                emit tagged(names@(k), [b=a, other=ob] ++ e)
             }
             ;; contacts go to both bodies, sensors only to the sensor
             val oa = w.objs@(a)
             if (k < 2) && w.objs@(b) && oa {
-                emit tagged(names@(k), [b=b, other=oa])
+                emit tagged(names@(k), [b=b, other=oa] ++ e)
             }
         }
     }
