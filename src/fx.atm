@@ -154,3 +154,29 @@ task HitParticle (x0, y0, o) {
     }
     await Tween(dur, st, [w=2, h=2, v=0], cubic_in_out)
 }
+
+;; The reveal of the characters of a line one by one, as the tags `cbyc`
+;; (red, with a shake and a pop), `cbyc2` (yellow), and `cbyc3` (bg10,
+;; quick, silent) of the original. In real time: it runs while the game
+;; is stopped.
+task Cbyc (t, kind) {
+    val line = t.lines@0
+    val color, step, loud = match kind {
+        :cbyc2 => (yellow@0, 0.15, true)
+        :cbyc3 => (bg@10, 0.025, false)
+        else   => (red@0, 0.15, true)
+    }
+    loop _, c in line.chars {
+        set c.color = invisible
+    }
+    loop i, c in line.chars {
+        if i > 0 {
+            await WaitReal(step)
+        }
+        set c.color = color
+        if loud {
+            shake(3, 0.075)
+            play(pop1, [pitch=rfloat(0.95, 1.05), volume=0.35])
+        }
+    }
+}
