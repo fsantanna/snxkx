@@ -185,7 +185,8 @@ task EliteAttack (A, e, fx, shots) {
             await((rfloat(2, 4)) * 1s)
             set e.aiming += 1
             loop {
-                await((rfloat(4, 6)) * 1s)
+                ;; as `set_every_multiplier('shooter', ...)` of the update
+                await((rfloat(4, 6)*(1 - math.min(e.level*0.02, 0.25))) * 1s)
                 loop i in 3 {
                     if i > 0 {
                         await((math.max(1 - e.level*0.01, 0.25)*0.15) * 1s)
