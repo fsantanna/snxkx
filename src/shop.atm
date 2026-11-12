@@ -256,7 +256,14 @@ task ShopCard (shop, i, x, y, character, units) {
     } with {
         loop {
             if !inside() {
-                await :mouse.mv until inside()
+                ;; out: back to its size, unless the mouse comes back first
+                ;; (the original cancels the tween by its tag, `pulse`)
+                par :any {
+                    await :mouse.mv until inside()
+                } with {
+                    await Tween(0.1, p, [sx=1], linear)
+                    await(false)
+                }
             }
             play(ui_hover1, [pitch=rfloat(1.3, 1.5), volume=0.5])
             play(pop2, [pitch=rfloat(0.95, 1.05), volume=0.5])
@@ -280,7 +287,6 @@ task ShopCard (shop, i, x, y, character, units) {
                 }
             }
             set selected = false
-            spawn Tween(0.1, p, [sx=1], linear)
         }
     }
 }

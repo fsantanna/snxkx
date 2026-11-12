@@ -74,6 +74,7 @@ task WaveDistributed (A, n, foes, fx, shots) {
 
 ;; The countdown and the waves of a level, until the last wave is gone.
 task Waves (A, foes, spawns, fx, shots) {
+    pin fxs = tasks()           ;; the flashes of the HUD
     set A.max_waves = LEVEL_MAX_WAVES@(level_index(A.level))
     set A.wave = 0
     set A.start_time = 3
@@ -84,7 +85,7 @@ task Waves (A, foes, spawns, fx, shots) {
             play(alert1, [volume=0.5])
         }
         set A.start_time -= 1
-        spawn HfxUse(A.cond1, 0.25, 200, 10)
+        spawn @fxs HfxUse(A.cond1, 0.25, 200, 10)
     }
     play(alert1, [pitch=1.2, volume=0.5])
     shake(4, 0.25)
@@ -94,7 +95,7 @@ task Waves (A, foes, spawns, fx, shots) {
         set A.wave += 1
         until A.wave > A.max_waves
         trace("wave", tostring(A.wave))
-        spawn HfxUse(A.cond1, 0.25, 200, 10)
+        spawn @fxs HfxUse(A.cond1, 0.25, 200, 10)
         spring_pull(A.cond2.s, 0.0625)
         await 500ms
         if rbool(LEVEL_DISTRIBUTED@(level_index(A.level))) {
@@ -112,6 +113,7 @@ task Waves (A, foes, spawns, fx, shots) {
 ;; whenever only the boss is left, until the boss is dead and the arena
 ;; is quiet.
 task BossWaves (A, foes, spawns, fx, shots) {
+    pin fxs = tasks()           ;; the flashes of the HUD
     set A.boss_level = true
     set A.start_time = 3
     await 1s
@@ -121,7 +123,7 @@ task BossWaves (A, foes, spawns, fx, shots) {
             play(alert1, [volume=0.5])
         }
         set A.start_time -= 1
-        spawn HfxUse(A.cond1, 0.25, 200, 10)
+        spawn @fxs HfxUse(A.cond1, 0.25, 200, 10)
     }
     play(alert1, [pitch=1.2, volume=0.5])
     shake(4, 0.25)
@@ -141,7 +143,7 @@ task BossWaves (A, foes, spawns, fx, shots) {
         }
         until !X.xin(boss, A.enemies)
         trace("wave", "boss")
-        spawn HfxUse(A.cond1, 0.25, 200, 10)
+        spawn @fxs HfxUse(A.cond1, 0.25, 200, 10)
         spring_pull(A.cond2.s, 0.0625)
         await 500ms
         spawn @spawns WaveGroup(A, n, foes, fx, shots)

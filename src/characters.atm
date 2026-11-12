@@ -173,42 +173,43 @@ task Sentry (A, u, fx, shots) {
 
 ;; The behavior of a unit by its character, while the unit lives.
 task Character (A, u, fx, shots) {
+    pin acts = tasks()          ;; the attacks, which live with the unit
     val near = \(rs) { #enemies_in_circle(A, u.x, u.y, rs) > 0 }
     val toward = \(e) { math.atan2(e.y - u.y, e.x - u.x) }
     match u.character {
         "vagrant" => loop {
             await Cooldown(u, 2, \{ near(96) })
             val e = closest_enemy(A, u.x, u.y, 96)
-            if e { spawn Shoot(A, u, toward(e), [], fx, shots) }
+            if e { spawn @acts Shoot(A, u, toward(e), [], fx, shots) }
         }
         "archer" => loop {
             await Cooldown(u, 2, \{ near(160) })
             val e = closest_enemy(A, u.x, u.y, 160)
-            if e { spawn Shoot(A, u, toward(e), [pierce=1000, ricochet=(if u.level == 3 => 3 => 0)], fx, shots) }
+            if e { spawn @acts Shoot(A, u, toward(e), [pierce=1000, ricochet=(if u.level == 3 => 3 => 0)], fx, shots) }
         }
         "scout" => loop {
             await Cooldown(u, 2, \{ near(64) })
             val e = closest_enemy(A, u.x, u.y, 64)
-            if e { spawn Shoot(A, u, toward(e), [chain=(if u.level == 3 => 6 => 3)], fx, shots) }
+            if e { spawn @acts Shoot(A, u, toward(e), [chain=(if u.level == 3 => 6 => 3)], fx, shots) }
         }
         "outlaw" => loop {
             await Cooldown(u, 3, \{ near(96) })
             val e = closest_enemy(A, u.x, u.y, 96)
-            if e { spawn Shoot(A, u, toward(e), [], fx, shots) }
+            if e { spawn @acts Shoot(A, u, toward(e), [], fx, shots) }
         }
         "wizard" => loop {
             await Cooldown(u, 2, \{ near(128) })
             val e = closest_enemy(A, u.x, u.y, 128)
-            if e { spawn Shoot(A, u, toward(e), [chain=(if u.level == 3 => 2 => 0)], fx, shots) }
+            if e { spawn @acts Shoot(A, u, toward(e), [chain=(if u.level == 3 => 2 => 0)], fx, shots) }
         }
         "swordsman" => loop {
             await Cooldown(u, 3, \{ near(48) })
-            spawn Attack(A, u, 96, nil, fx)
+            spawn @acts Attack(A, u, 96, nil, fx)
         }
         "magician" => loop {
             await Cooldown(u, 2, \{ near(96) })
             val e = random_enemy(A, u.x, u.y, 96)
-            if e { spawn Attack(A, u, 32, [x=e.x, y=e.y], fx) }
+            if e { spawn @acts Attack(A, u, 32, [x=e.x, y=e.y], fx) }
         }
         "cleric" => loop {
             await 8s

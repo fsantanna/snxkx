@@ -110,11 +110,12 @@ task ExploderMine (A, x, y, src, fx, shots) {
     }
     await Tween(0.05, [t=0], [t=1], linear)
     spring_pull(s, 0.15)
+    pin fxs = tasks()
     loop i in 3 {
         await 800ms
         play(mine1, [pitch=1 + i*0.1, volume=0.5])
         spring_pull(s, 0.5, 200, 10)
-        spawn HfxUse(h, 0.5, 200, 10, 0.2)
+        spawn @fxs HfxUse(h, 0.5, 200, 10, 0.2)
     }
     play(shoot1, [pitch=rfloat(0.95, 1.05), volume=0.4])
     play(cannoneer1, [pitch=rfloat(0.95, 1.05), volume=0.4])
@@ -170,6 +171,7 @@ task BoostAround (A, e, max, duration, fx) {
 
 ;; The attack of an elite, beside its movement, while it lives.
 task EliteAttack (A, e, fx, shots) {
+    pin fxs = tasks()
     match e.elite {
         "speed_booster" => {
             await((rfloat(16, 24)) * 1s)
@@ -192,7 +194,7 @@ task EliteAttack (A, e, fx, shots) {
                         await((math.max(1 - e.level*0.01, 0.25)*0.15) * 1s)
                     }
                     play(shoot1, [pitch=rfloat(0.95, 1.05), volume=0.1])
-                    spawn HfxUse(e.hit, 0.25, 200, 10, 0.1)
+                    spawn @fxs HfxUse(e.hit, 0.25, 200, 10, 0.1)
                     val r = e.r
                     spawn @fx HitCircle(e.x + 0.8*14*math.cos(r), e.y + 0.8*14*math.sin(r), [rs=6])
                     spawn @shots EnemyProjectile(A, [x=e.x + 1.6*14*math.cos(r), y=e.y + 1.6*14*math.sin(r),
@@ -220,7 +222,7 @@ task EliteAttack (A, e, fx, shots) {
                 await Tween(2, c, [r=f_r, g=f_g, b=f_b], cubic_in_out)
                 set e.aiming -= 1
                 ;; and headbutts the leader
-                spawn Tween(0.25, c, [r=o_r, g=o_g, b=o_b], linear)
+                spawn @fxs Tween(0.25, c, [r=o_r, g=o_g, b=o_b], linear)
                 play(headbutt1, [pitch=rfloat(0.95, 1.05), volume=0.2])
                 set e.headbutting = true
                 body_set(e.b, :damping, 0)
@@ -256,6 +258,7 @@ task SteeringImpulse (st, f, r, s) {
 ;; The attack of the boss "speed_booster": every 8s, it boosts up to four
 ;; seekers around it. Its bar shows the time to the next one.
 task BossAttack (A, e, fx) {
+    pin fxs = tasks()
     loop {
         var t = 0
         loop us on :clock {
@@ -263,6 +266,6 @@ task BossAttack (A, e, fx) {
             set e.attack_ratio = t/8
             until t > 8
         }
-        spawn BoostAround(A, e, 4, 3 + e.level*0.015, fx)
+        spawn @fxs BoostAround(A, e, 4, 3 + e.level*0.015, fx)
     }
 }

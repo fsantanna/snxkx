@@ -58,10 +58,12 @@ task Seeker (A, e, fx, shots) {
     val st = if e.boss => steerable(e.b, e.v, 1000, 2*math.pi, 2) => steerable(e.b, e.v, 2000, 4*math.pi, 4)
     set e.st = st
     spawn SpeedBoosts(e)
-    if e.boss {
-        spawn BossAttack(A, e, fx)
-    } else {
-        spawn EliteAttack(A, e, fx, shots)
+    spawn {
+        if e.boss {
+            await BossAttack(A, e, fx)
+        } else {
+            await EliteAttack(A, e, fx, shots)
+        }
     }
     set A.enemies@+ = e
     defer {
@@ -75,6 +77,8 @@ task Seeker (A, e, fx, shots) {
         set A.enemies = es
     }
     spawn Springs(e.hit.s)
+    ;; the effects of the seeker (a flash, its bar of hp), which live with it
+    pin fxs = tasks()
 
     spawn {
         loop on :draw {
@@ -93,7 +97,7 @@ task Seeker (A, e, fx, shots) {
     ;; the walls
     spawn {
         loop c on :collision.enter until (it.b == e.b) && (it.other.kind == :wall) {
-            spawn HfxUse(e.hit, 0.15, 200, 10, 0.1)
+            spawn @fxs HfxUse(e.hit, 0.15, 200, 10, 0.1)
             bounce(e, c.nx, c.ny)
         }
     }
@@ -101,8 +105,8 @@ task Seeker (A, e, fx, shots) {
     par :any {
         ;; the life of the seeker: until its hp ends
         loop h on :Hit until it.to == e {
-            spawn HfxUse(e.hit, 0.25, 200, 10)
-            spawn ShowHp(e)
+            spawn @fxs HfxUse(e.hit, 0.25, 200, 10)
+            spawn @fxs ShowHp(e)
             val dmg = math.max(unit_damage(e, h.dmg), 0)
             set e.hp = math.min(e.hp - dmg, e.max_hp)
             set A.damage_dealt += dmg

@@ -117,18 +117,23 @@ task Unit (A, u, fx, shots) {
         body_free(A.w, u.b)
     }
     spawn Springs(u.hit.s, u.shoot.s)
-    if !A.menu {
-        spawn Character(A, u, fx, shots)
+    ;; the effects of the unit (a flash, its bar of hp): they live with the
+    ;; unit, not with the reaction that starts them
+    pin fxs = tasks()
+    spawn {
+        if !A.menu {
+            await Character(A, u, fx, shots)
+        }
     }
 
     ;; heals, as `Player:heal`
     spawn {
         loop e on :Heal until it.to == u {
-            spawn HfxUse(u.hit, 0.25, 200, 10)
-            spawn ShowHp(u, 1.5)
+            spawn @fxs HfxUse(u.hit, 0.25, 200, 10)
+            spawn @fxs ShowHp(u, 1.5)
             set u.hp = math.min(u.hp + e.amount, u.max_hp)
             if u.chp {
-                spawn HfxUse(u.chp, 0.5)
+                spawn @fxs HfxUse(u.chp, 0.5)
             }
         }
     }
@@ -176,10 +181,10 @@ task Unit (A, u, fx, shots) {
     par :any {
         ;; the life of the unit: until its hp ends
         loop e on :Hit until it.to == u {
-            spawn HfxUse(u.hit, 0.25, 200, 10)
-            spawn ShowHp(u)
+            spawn @fxs HfxUse(u.hit, 0.25, 200, 10)
+            spawn @fxs ShowHp(u)
             if u.chp {
-                spawn HfxUse(u.chp, 0.5)
+                spawn @fxs HfxUse(u.chp, 0.5)
             }
             val dmg = if STRESS => 0 => math.max(unit_damage(u, e.dmg), 0)
             set u.hp -= dmg
@@ -261,7 +266,7 @@ task Unit (A, u, fx, shots) {
         } with {
             ;; the walls: it bounces, and the followers feel it in turn
             loop e on :collision.enter until (it.b == u.b) && (it.other.kind == :wall) {
-                spawn HfxUse(u.hit, 0.5, 200, 10, 0.1)
+                spawn @fxs HfxUse(u.hit, 0.5, 200, 10, 0.1)
                 spring_shake(2, math.pi - u.r)
                 bounce(u, e.nx, e.ny)
                 val p = rfloat(0.9, 1.1)
