@@ -1,0 +1,214 @@
+;; How enemies come into the arena, as `SpawnMarker` (`objects.lua`),
+;; `SpawnEffect` (`shared.lua`), and `Arena:spawn_n_enemies` and
+;; `Arena:spawn_distributed_enemies` (`arena.lua`).
+;;
+;; A spawn is a task in the pool `A.spawns` of the arena while it lasts:
+;; the arena is "spawning enemies" while that pool is not empty, which is
+;; the flag `spawning_enemies` of the original.
+
+;; The ramps of the colors by name, as `_G[name]` of the original.
+val RAMPS = [
+    white=white, black=black, bg=bg, fg=fg, fg_alt=fg_alt, yellow=yellow,
+    orange=orange, blue=blue, green=green, red=red, purple=purple,
+    blue2=blue2, yellow2=yellow2,
+]
+
+;; As `SpawnMarker`: a red cross that blinks faster and faster for 1.125s.
+task SpawnMarker (x, y) {
+    trace("add", string.format("SpawnMarker %.1f %.1f", x, y))
+    val r = rfloat(0, 2*math.pi)
+    val s = spring(1)
+    spring_pull(s, rfloat(0.4, 0.6), 200, 10)
+    spawn Springs(s)
+    play(pop3, [pitch=1, volume=0.15])
+    par :any {
+        await 1125ms
+    } with {
+        var m = 1
+        loop {
+            ;; shown
+            par :any {
+                await((rfloat(0.195, 0.24)*m) * 1s)
+            } with {
+                loop on :draw {
+                    eng.push(x, y, r, s.x)
+                    eng.push(x, y, r + math.pi/4)
+                    eng.rect(x, y, 24, 6, 4, 4, red@0)
+                    eng.pop()
+                    eng.push(x, y, r + 3*math.pi/4)
+                    eng.rect(x, y, 24, 6, 4, 4, red@0)
+                    eng.pop()
+                    eng.pop()
+                }
+            }
+            set m = m*rfloat(0.84, 0.87)
+            ;; hidden
+            await((rfloat(0.195, 0.24)*m) * 1s)
+            set m = m*rfloat(0.84, 0.87)
+        }
+    }
+}
+
+;; As `SpawnEffect`: a circle that pops, bursts, and shrinks. The original
+;; calls `action` at the peak of the pop; here the caller awaits this
+;; task, which ends at the peak, while the circle lives on in `fx`.
+task SpawnEffect (x, y, color, fx) {
+    spawn @fx SpawnCircle(x, y, color || red@0, fx)
+    await Tween(0.1, [t=0], [t=1], linear)      ;; the pop of the circle
+}
+
+task SpawnCircle (x, y, target, fx) {
+    val st = [ rs=0, color=fg@0 ]
+    val s = spring(1)
+    spawn Springs(s)
+    spawn {
+        loop on :draw {
+            eng.circle(x, y, rfloat(0.9, 1.1)*st.rs*s.x, st.color)
+        }
+    }
+    await Tween(0.1, st, [rs=6], cubic_in_out)
+    spring_pull(s, 1)
+    loop _ in rint(6, 8) {
+        spawn @fx HitParticle(x, y, [color=target, duration=rfloat(0.3, 0.5), w=rfloat(5, 8), v=rfloat(150, 200)])
+    }
+    spawn {
+        await 150ms
+        set st.color = target
+    }
+    await Tween(0.25, st, [rs=0], linear)
+}
+
+;; Whether a small circle at (x,y) touches a unit or an enemy, as
+;; `get_objects_in_shape(Circle(x, y, 2), ...)`.
+func spawn_blocked (A, x, y) {
+    val hit = \(o) {
+        ;; the point in the frame of the rectangle of o, against its box
+        val dx = x - o.x
+        val dy = y - o.y
+        val c = math.cos(-(o.r || 0))
+        val s = math.sin(-(o.r || 0))
+        val lx = math.abs(c*dx - s*dy)
+        val ly = math.abs(s*dx + c*dy)
+        (lx <= (o.w/2 + 2)) && (ly <= (o.h/2 + 2))
+    }
+    var blocked = false
+    loop _, o in A.units ++ A.enemies {
+        if hit(o) {
+            set blocked = true
+        }
+    }
+    blocked
+}
+
+;; As `spawn_n_enemies(p, j, n, pass)`: `n` enemies around `p`, one every
+;; 0.1s, each after a spawn effect; elites with the odds of the level. An
+;; enemy that would spawn over another body does not, and is counted in
+;; `A.spawns_prevented`, unless `pass`.
+task SpawnN (A, p, n, pass, foes, fx) {
+    val offsets = [[-12, -12], [12, -12], [12, 12], [-12, 12], [0, 0]]
+    pin ss = tasks()
+    loop i in (n || 4) {
+        await 100ms
+        val o = offsets@(i % 5)
+        spawn @ss SpawnOne(A, p.x + o@0, p.y + o@1, pass, foes, fx)
+    }
+    await :all ss
+}
+
+;; One enemy of `SpawnN`, after its spawn effect.
+task SpawnOne (A, x, y, pass, foes, fx) {
+    await SpawnEffect(x, y, nil, fx)
+    play(spawn1, [pitch=rfloat(0.8, 1.2), volume=0.15])
+    if !pass && spawn_blocked(A, x, y) {
+        set A.spawns_prevented += 1
+    } else {
+        val ws = level_to_elite_spawn_weights@(A.level)
+        var sum = 0
+        loop _, w in ws {
+            set sum += w
+        }
+        val elite = if rbool(sum) => (level_to_elite_spawn_types@(A.level))@(rweighted(ws)) => nil
+        spawn @foes Seeker(A, [x=x, y=y, level=A.level, elite=elite], fx)
+    }
+}
+
+;; The places where groups of enemies may spawn.
+func spawn_points (A) {
+    [
+        [x=A.x1 + 32, y=A.y1 + 32, r=math.pi/4],
+        [x=A.x1 + 32, y=A.y2 - 32, r=-math.pi/4],
+        [x=A.x2 - 32, y=A.y1 + 32, r=3*math.pi/4],
+        [x=A.x2 - 32, y=A.y2 - 32, r=-3*math.pi/4],
+        [x=W/2, y=H/2, r=rfloat(0, 2*math.pi)],
+    ]
+}
+
+;; A marker at a place, and `n` enemies there 1.125s later.
+task MarkAndSpawn (A, p, n, pass, foes, fx) {
+    spawn @fx SpawnMarker(p.x, p.y)
+    await 1125ms
+    await SpawnN(A, p, n, pass, foes, fx)
+}
+
+;; Groups at `k` places, each one after 0 to 0.2s, `n` enemies each.
+task MarkAndSpawnK (A, ps, k, n, pass, foes, fx) {
+    pin gs = tasks()
+    loop _ in k {
+        spawn @gs MarkLater(A, ps, n, pass, foes, fx)
+    }
+    await :all gs
+}
+
+;; A group of `MarkAndSpawnK`, 0 to 0.2s later, at a place taken from `ps`.
+task MarkLater (A, ps, n, pass, foes, fx) {
+    await((rfloat(0, 0.2)) * 1s)
+    await MarkAndSpawn(A, rtable_remove(ps), n, pass, foes, fx)
+}
+
+;; As `spawn_distributed_enemies`: one of six patterns over the spawn
+;; points, which lasts as the original's flag `spawning_enemies`.
+task SpawnDistributed (A, foes, fx) {
+    val kinds = ["4", "4+4", "4+4+4", "2x4", "3x4", "4x2"]
+    val kind = kinds@(rweighted([20, 20, 10, 15, 10, 15]))
+    val ps = spawn_points(A)
+    match kind {
+        "4" => par :all {
+            await 2250ms
+        } with {
+            await MarkAndSpawn(A, rtable_remove(ps), 4, false, foes, fx)
+        }
+        "4+4" => par :all {
+            await 4250ms
+        } with {
+            val p = rtable_remove(ps)
+            await MarkAndSpawn(A, p, 4, false, foes, fx)
+            await 2s
+            await SpawnN(A, p, 4, false, foes, fx)
+        }
+        "4+4+4" => par :all {
+            await 4250ms
+        } with {
+            val p = rtable_remove(ps)
+            await MarkAndSpawn(A, p, 4, false, foes, fx)
+            await 1s
+            await SpawnN(A, p, 4, false, foes, fx)
+            await 1s
+            await SpawnN(A, p, 4, false, foes, fx)
+        }
+        "2x4" => par :all {
+            await 2250ms
+        } with {
+            await MarkAndSpawnK(A, ps, 2, 4, false, foes, fx)
+        }
+        "3x4" => par :all {
+            await 2250ms
+        } with {
+            await MarkAndSpawnK(A, ps, 3, 4, false, foes, fx)
+        }
+        "4x2" => par :all {
+            await 2250ms
+        } with {
+            await MarkAndSpawnK(A, ps, 4, 2, false, foes, fx)
+        }
+    }
+}
