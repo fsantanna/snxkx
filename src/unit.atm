@@ -122,3 +122,7 @@ func unit_stats (u, first, ng) {
 func unit_damage (u, dmg) {
     if u.def >= 0 => dmg*(100/(100 + u.def)) => dmg*(2 - 100/(100 + u.def))
 }
+
+;; For the benchmark: SNX_STRESS=n more seekers when an arena starts, and
+;; the units take no damage (as SNKRX_STRESS in the bench of the original).
+val STRESS = tonumber(os.getenv("SNX_STRESS") || "")

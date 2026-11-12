@@ -13,6 +13,8 @@
 --   SNKRX_DUMP=file         dumps the data of the game (see dump.lua), quits
 --   SNKRX_TRACE_POS=Class   traces the position and velocity of the objects
 --                           of a class of the main group, in every tick
+--   SNKRX_STRESS=n          n more seekers when an arena starts, and the
+--                           units take no damage
 --
 -- Time is simulated: every loop runs exactly one tick, and
 -- `love.timer.getTime` returns ticks * 1/60, so that runs repeat.
@@ -177,6 +179,22 @@ function bench.install ()
     local name = type(s) == "string" and s or s.name
     bench.trace("go", name)
     return go_to(self, s, ...)
+  end
+
+  -- SNKRX_STRESS=n: n more seekers when an arena starts, in a grid, and
+  -- the units take no damage (for the benchmark; the port does the same
+  -- with SNX_STRESS)
+  local stress = tonumber(getenv("SNKRX_STRESS", ""))
+  if stress then
+    local hit = Player.hit
+    function Player:hit (damage, ...) return hit(self, 0, ...) end
+    local on_enter = Arena.on_enter
+    function Arena:on_enter (...)
+      on_enter(self, ...)
+      for i = 0, stress-1 do
+        Seeker{group = self.main, x = 60 + (i%20)*18, y = 40 + math.floor(i/20)*19, character = 'seeker', level = self.level}
+      end
+    end
   end
 
   local add = Group.add

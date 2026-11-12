@@ -157,6 +157,11 @@ task Arena (A, enemies) {
         }
     }
 
+    ;; for the benchmark (see `STRESS`), more seekers, in a grid
+    loop i in (if A.menu => 0 => (STRESS || 0)) {
+        spawn @foes Seeker(A, [x=60 + (i%20)*18, y=40 + (i//20)*19, level=A.level], effects, shots)
+    }
+
     val r = par :any {
         await :Arena.died
         :died
