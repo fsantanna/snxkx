@@ -263,6 +263,20 @@ task EliteAttack (A, e, fx, shots) {
                 }
             }
         }
+        "tank" => loop {
+            ;; it pushes the closest enemy toward the leader
+            await((rfloat(3, 5)*remap(A.ng || 0, 0, 5, 1, 0.75)) * 1s)
+            if !(e.silenced || e.stunned) {
+                val o = closest_enemy(A, e.x, e.y, 64, [e])
+                val l = A.units@0
+                if o && l {
+                    play(wizard1, [pitch=rfloat(0.95, 1.05), volume=0.5])
+                    spawn @fx HitCircle(e.x, e.y, [rs=6, color=yellow@0, duration=0.1])
+                    spawn @fx LightningLine(e, o, yellow@0, fx)
+                    push(o, rfloat(30, 50), angle_to(o, l.x, l.y), true)
+                }
+            }
+        }
         else => await(false)
     }
 }
@@ -280,17 +294,296 @@ task SteeringImpulse (st, f, r, s) {
     await Tween(s/2, st, [ix=0, iy=0], linear)
 }
 
-;; The attack of the boss "speed_booster": every 8s, it boosts up to four
-;; seekers around it. Its bar shows the time to the next one.
-task BossAttack (A, e, fx) {
+;; The attack of a boss, every few seconds (`'boss_attack'`), shown by its
+;; bar (`e.attack_ratio`): the speed booster boosts up to four seekers
+;; around it (8s), the forcer pulls the enemies together and throws them
+;; at the snake (6s), the swarmer and the exploder sacrifice a seeker for
+;; critters or a mine (4s), and the randomizer does one of these at random
+;; (6s), changing its color all the time (`enemies.lua:19-160`).
+task BossAttack (A, e, fx, shots) {
     pin fxs = tasks()
+    val d = match e.boss { "speed_booster" => 8 ; "forcer" => 6 ; "randomizer" => 6 ; else => 4 }
+    if e.boss == "randomizer" {
+        spawn @fxs Randomize(e)
+    }
     loop {
         var t = 0
         loop us on :clock {
             set t += us / 1000000
-            set e.attack_ratio = t/8
-            until t > 8
+            set e.attack_ratio = t/d
+            until t > d
         }
-        spawn @fxs BoostAround(A, e, 4, 3 + e.level*0.015, fx)
+        if !(e.silenced || e.stunned) {
+            val k = if e.boss == "randomizer" => rtable(["explode", "swarm", "force", "speed_boost"]) => e.boss
+            val near = enemies_in_circle(A, e.x, e.y, 128)
+            match k {
+                "speed_booster" => spawn @fxs BoostAround(A, e, 4, 3 + e.level*0.015 + (A.ng || 0)*0.1, fx)
+                "speed_boost" => spawn @fxs BoostAround(A, e, nil, 3 + e.level*0.015 + (A.ng || 0)*0.1, fx)
+                "forcer" => spawn @fxs ForcerPull(A, e, fx)
+                "force" => spawn @fxs ForceAround(A, e, fx)
+                "swarmer" => spawn @fxs Sacrifice(A, e, others(A, e), :swarm, fx, shots)
+                "swarm" => spawn @fxs Sacrifice(A, e, near, :swarm, fx, shots)
+                "exploder" => spawn @fxs Sacrifice(A, e, others(A, e), :mine, fx, shots)
+                "explode" => spawn @fxs Sacrifice(A, e, near, :burst, fx, shots)
+            }
+        }
     }
+}
+
+;; The seekers other than `e`.
+func others (A, e) {
+    val out = []
+    loop _, o in A.enemies {
+        if (o != e) && (o.kind == :enemy) {
+            set out@+ = o
+        }
+    }
+    out
+}
+
+;; A boss kills a random seeker of `es`, which turns into critters (4 to
+;; 6), a mine, or a burst of projectiles.
+task Sacrifice (A, e, es, what, fx, shots) {
+    val ss = []
+    loop _, o in es {
+        if (o != e) && (o.kind == :enemy) {
+            set ss@+ = o
+        }
+    }
+    if #ss == 0 {
+        return nil
+    }
+    val o = rtable(ss)
+    val color = match what { :swarm => purple@0 ; else => blue@0 }
+    spawn @fx HitCircle(e.x, e.y, [rs=6, color=color, duration=0.1])
+    spawn @fx LightningLine(e, o, color, fx)
+    hit(o, 10000)
+    match what {
+        :swarm => {
+            play(critter1, [pitch=rfloat(0.95, 1.05), volume=0.5])
+            play(critter3, [pitch=rfloat(0.95, 1.05), volume=0.6])
+            loop _ in rint(4, 6) {
+                spawn @shots EnemyCritter(A, o.x, o.y, rfloat(0, 2*math.pi), 8 + 0.1*o.level, 2*o.dmg, nil, fx)
+            }
+        }
+        :mine => {
+            play(mine1, [pitch=rfloat(0.95, 1.05), volume=0.5])
+            spawn @shots ExploderMine(A, o.x, o.y, o, fx, shots)
+        }
+        :burst => {
+            play(shoot1, [pitch=rfloat(0.95, 1.05), volume=0.4])
+            val n = 8 + (A.ng || 0)*2
+            loop i in n {
+                spawn @shots EnemyProjectile(A, [x=o.x, y=o.y, color=blue@0, r=i*math.pi/(n/2),
+                    v=125 + 5*o.level, dmg=(1 + 0.15*(A.ng || 0))*o.dmg], fx)
+            }
+        }
+    }
+}
+
+;; The force of the randomizer: the seekers within 64 thrown at the leader.
+task ForceAround (A, e, fx) {
+    val es = enemies_in_circle(A, e.x, e.y, 64)
+    if #es > 0 {
+        play(wizard1, [pitch=rfloat(0.95, 1.05), volume=0.5])
+        spawn @fx HitCircle(e.x, e.y, [rs=6, color=yellow@0, duration=0.1])
+        val l = A.units@0
+        loop _, o in es {
+            spawn @fx LightningLine(e, o, yellow@0, fx)
+            if l {
+                push(o, rfloat(40, 80), angle_to(o, l.x, l.y), true)
+            }
+        }
+    }
+}
+
+;; The randomizer changes its color every 0.07s.
+task Randomize (e) {
+    loop {
+        set e.color = rtable([green@0, purple@0, yellow@0, blue@0])
+        await 70ms
+    }
+}
+
+;; The pull of the forcer: a circle at the middle of the enemies pulls
+;; them for 2s, and then they are thrown at the leader.
+task ForcerPull (A, e, fx) {
+    var x, y = 0, 0
+    if #A.enemies > 0 {
+        loop _, o in A.enemies {
+            set x += o.x
+            set y += o.y
+        }
+        set x = x/#A.enemies
+        set y = y/#A.enemies
+    } else {
+        val l = A.units@0
+        set x = l && l.x || (W/2)
+        set y = l && l.y || (H/2)
+    }
+    val px = x + rfloat(-16, 16)
+    val py = y + rfloat(-16, 16)
+    val st = [ prs=0, vr=0 ]
+    val dvr = rfloat(-math.pi/4, math.pi/4)
+    val faint = alpha(yellow@0, 0.08)
+    var shown = true
+    pin ps = tasks()
+    spawn @ps Tween(0.05, st, [prs=4], cubic_in_out)
+    spawn {
+        loop on :draw {
+            if shown {
+                eng.circle(px, py, st.prs + rfloat(-1, 1), yellow@0)
+                round_area(px, py, 160, st.vr, 1, yellow@0, faint)
+            }
+        }
+    }
+    spawn {
+        loop _ in math.floor(2/0.08) {
+            await 80ms
+            spawn @fx HitParticle(px, py, [color=yellow@0])
+        }
+    }
+    spawn {
+        await((2 - 0.05*7) * 1s)
+        loop i in 7 {
+            if i > 0 {
+                await 50ms
+            }
+            set shown = !shown
+        }
+    }
+    play(force1, [pitch=rfloat(0.95, 1.05), volume=0.5])
+    par :any {
+        await 2s
+    } with {
+        loop us on :clock {
+            loop _, o in enemies_in_circle(A, px, py, 160) {
+                val dd = math.sqrt((o.x - px)*(o.x - px) + (o.y - py)*(o.y - py))
+                if o.st {
+                    steer_force(o.st, remap(dd, 0, 160, 400, 200), angle_to(o, px, py))
+                }
+            }
+            set st.vr += dvr*(us / 1000000)
+        }
+    }
+    play(wizard1, [pitch=rfloat(0.95, 1.05), volume=0.5])
+    spawn @fx HitCircle(e.x, e.y, [rs=6, color=yellow@0, duration=0.1])
+    val l = A.units@0
+    loop _, o in enemies_in_circle(A, px, py, 160) {
+        spawn @fx LightningLine(e, o, yellow@0, fx)
+        if l {
+            push(o, rfloat(40, 80), angle_to(o, l.x, l.y), true)
+        }
+    }
+}
+
+;; As `EnemyCritter`: a small purple enemy, thrown out, that chases the
+;; leader and bites a unit once (and dies). The projectile that killed its
+;; seeker does not hit it in its first 0.5s.
+task EnemyCritter (A, x, y, r, v, dmg, from, fx) {
+    trace("add", string.format("EnemyCritter %.1f %.1f", x, y))
+    val c = [ kind=:enemy_critter, w=7, h=4, x=x, y=y, r=r, stats=:critter, classes=[:enemy_critter],
+              color=purple@0, hit=hfx(1), hp_shown=0 ]
+    unit_stats(c, true, A.ng)
+    set c.dmg = dmg
+    body(A.w, c, :dynamic, x, y, :enemy_projectile, [:rect, 7, 4])
+    body_restitution(c.b, 0.5)
+    val st = steerable(c.b, c.v, 400, math.pi, 1)
+    set c.st = st
+    set A.enemies@+ = c
+    defer {
+        body_free(A.w, c.b)
+        val es = []
+        loop _, o in A.enemies {
+            if o != c {
+                set es@+ = o
+            }
+        }
+        set A.enemies = es
+    }
+    spawn Springs(c.hit.s)
+    pin fxs = tasks()
+    spawn SeekerSlows(c)
+    spawn {
+        loop on :draw {
+            eng.push(c.x, c.y, c.r, c.hit.s.x)
+            eng.rect(c.x, c.y, 7, 4, 2, 2, if c.hit.f > 0 => fg@0 => c.color)
+            eng.pop()
+            draw_hp_bar(c, 7, 4, red@0)
+        }
+    }
+    spawn {
+        loop w on :collision.enter until (it.b == c.b) && (it.other.kind == :wall) {
+            spawn @fxs HfxUse(c.hit, 0.15, 200, 10, 0.1)
+            bounce(c, w.nx, w.ny)
+        }
+    }
+    var shielded = from
+    spawn {
+        await 500ms
+        set shielded = nil
+    }
+    par :any {
+        loop h on :Hit until it.to == c {
+            if !(shielded && (h.projectile == shielded)) {
+                spawn @fxs HfxUse(c.hit, 0.25, 200, 10)
+                spawn @fxs ShowHp(c)
+                set c.hp -= math.max(h.dmg, 0)
+            }
+            until c.hp <= 0
+        }
+    } with {
+        val t = await :trigger.enter until (it.b == c.b) && (it.other.kind == :player)
+        hit(t.other, c.dmg, [from_enemy=true])
+    } with {
+        var p = [ f=v, r=r ]
+        loop {
+            loop {
+                body_set(c.b, :impulse, p.f*math.cos(p.r), p.f*math.sin(p.r))
+                body_set(c.b, :angular_impulse,
+                    rtable([rfloat(-12*math.pi, -4*math.pi), rfloat(4*math.pi, 12*math.pi)]))
+                body_set(c.b, :damping, 1.5)
+                body_set(c.b, :angular_damping, 1.5)
+                set p = par :any {
+                    loop on :clock {
+                        set c.x, c.y = body_pos(c.b)
+                        set c.r = body_angle(c.b)
+                        val vx, vy = body_vel(c.b)
+                        until math.sqrt(vx*vx + vy*vy) < 50
+                    }
+                    nil
+                } with {
+                    await :Push until it.to == c
+                }
+                until !p
+            }
+            body_set(c.b, :damping, 0)
+            body_set(c.b, :angular_damping, 0)
+            set p = par :any {
+                loop on :clock {
+                    set c.x, c.y = body_pos(c.b)
+                    set c.r = body_angle(c.b)
+                    set c.buff_mvspd_m = (c.slowed || 1)*(c.temporal_chains_mvspd_m || 1)
+                    unit_stats(c, false, A.ng)
+                    set st.max_v = c.max_v
+                    steer_update(st)
+                    val l = A.units@0
+                    if l {
+                        seek_point(st, l.x, l.y)
+                    }
+                    wander(st, 50, 200, 50)
+                    separate(st, 8, A.enemies)
+                    rotate_towards_velocity(c.b, 1)
+                }
+            } with {
+                await :Push until it.to == c
+            }
+        }
+    }
+    loop _ in rint(2, 3) {
+        spawn @fx HitParticle(c.x, c.y, [r=rfloat(0, 2*math.pi), color=c.color])
+    }
+    spawn @fx HitCircle(c.x, c.y, [scale_down=true])
+    play(rtable([enemy_die1, enemy_die2]), [pitch=rfloat(0.9, 1.1), volume=0.5])
+    play(critter2, [pitch=rfloat(0.95, 1.05), volume=0.2])
 }

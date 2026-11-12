@@ -1,5 +1,5 @@
 0	add	Seeker 100.0 100.0
 220	enemy.die	seeker
-220	clear	3
-502	passive	magnify
-517	buy_screen	passives	1	magnify	pool	81
+221	clear	3
+502	passive	lucky_strike
+517	buy_screen	passives	1	lucky_strike	pool	81

@@ -216,7 +216,7 @@ task Arena (A, enemies) {
                 loop _, e in enemies {
                     spawn @foes Seeker(A, [x=e@0, y=e@1, level=e@2, elite=e@3, boss=e@4], effects, shots)
                 }
-                await Quiet(foes, spawns)
+                await Quiet(A, foes, spawns)
             }
             (((A.level - 25*A.loop) % 6) == 0) || ((A.level % 25) == 0) => par :any {
                 await BossWaves(A, foes, spawns, effects, shots)

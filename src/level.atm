@@ -33,13 +33,17 @@ func level_index (level) {
 
 ;; Until the arena has no enemies and spawns none: the condition of the
 ;; waves of the original (`#enemies <= 0 and not self.spawning_enemies`).
-task Quiet (foes, spawns) {
+task Quiet (A, foes, spawns) {
     loop {
         if #spawns > 0 {
             await :all spawns
         }
         if #foes > 0 {
             await :all foes
+        }
+        ;; the critters of the enemies count too (they are not in `foes`)
+        loop on :clock {
+            until #A.enemies == 0
         }
         until (#spawns == 0) && (#foes == 0)
     }
@@ -91,7 +95,7 @@ task Waves (A, foes, spawns, fx, shots) {
     shake(4, 0.25)
     spawn @fx SpawnCircle(W/2, H/2 - 48, red@0, fx)
     loop {
-        await Quiet(foes, spawns)
+        await Quiet(A, foes, spawns)
         set A.wave += 1
         until A.wave > A.max_waves
         trace("wave", tostring(A.wave))

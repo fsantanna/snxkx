@@ -58,6 +58,12 @@ task Seeker (A, e, fx, shots) {
         set e.temporal_chains_mvspd_m = 0.9      ;; 0.9 at every level, as the original
     }
     unit_stats(e, true, A.ng)
+    if e.elite == "tank" {
+        ;; the tank has more hp (`enemies.lua:204`)
+        set e.buff_hp_m = 1.25 + 0.1*e.level + 0.4*(A.ng || 0)
+        unit_stats(e, false, A.ng)
+        set e.hp = e.max_hp
+    }
     val intimidation = passive_level(A, "intimidation")
     if intimidation && !e.boss && (e.elite != "tank") {
         set e.buff_hp_m = lv(intimidation, 0.9, 0.8, 0.7)
@@ -129,7 +135,7 @@ task Seeker (A, e, fx, shots) {
     }
     spawn {
         if e.boss {
-            await BossAttack(A, e, fx)
+            await BossAttack(A, e, fx, shots)
         } else {
             await EliteAttack(A, e, fx, shots)
         }
@@ -401,6 +407,13 @@ task Seeker (A, e, fx, shots) {
     val quiet = e.silenced || e.stunned         ;; no last act
     if (e.elite == "speed_booster") && !quiet {
         spawn @fx BoostAround(A, e, nil, 3, fx)
+    }
+    if (e.elite == "spawner") && !quiet {
+        play(critter1, [pitch=rfloat(0.95, 1.05), volume=0.35])
+        loop _ in rint(5, 8) {
+            spawn @shots EnemyCritter(A, e.x, e.y, rfloat(0, 2*math.pi), 10 + 0.1*e.level, 2*e.dmg,
+                last && last.projectile, fx)
+        }
     }
     if (e.elite == "exploder") && !quiet {
         play(mine1, [pitch=rfloat(0.95, 1.05), volume=0.5])

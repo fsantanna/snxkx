@@ -1,0 +1,17 @@
+;; The other bosses and elites: the forcer, the swarmer, the exploder, the
+;; randomizer, a tank, and a spawner, with seekers around them.
+include "../../src/game.atm"
+spawn Background()
+spawn Camera()
+spawn SlowMotion()
+
+val run = [ level=12, loop=0, gold=3, units=[ ["swordsman", 1], ["cleric", 1], ["squire", 1] ] ]
+val A = new_arena(12)
+set A.run = run
+val es = [ [100, 60, 24, nil, "forcer"], [380, 60, 18, nil, "swarmer"], [100, 210, 12, nil, "exploder"],
+           [380, 210, 25, nil, "randomizer"], [240, 60, 11, "tank"], [240, 210, 14, "spawner"] ]
+loop i in 12 {
+    set es@+ = [ 80 + (i % 6)*64, 100 + (i // 6)*70, 5 ]
+}
+spawn Arena(A, es)
+await(false)

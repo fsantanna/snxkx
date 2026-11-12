@@ -13,5 +13,5 @@
 274	enemy.die	shooter
 305	unit.hit	vagrant 578.7
 338	enemy.die	speed_booster
-338	clear	6
-519	buy_screen
+339	clear	6
+520	buy_screen
