@@ -41,6 +41,8 @@ static int           EG_TICK = 0;       // the number of the current tick
 static double        EG_MX = 0, EG_MY = 0;  // the mouse, in game pixels
 static double        EG_SLOW = 1.0;     // the scale of the game time
 static double        EG_GAME = 0.0;     // game time not emitted yet, in us
+static int           EG_RENDER_ALL = 0; // in test mode, render every frame
+static Uint64        EG_PROF[3];        // SNX_PROFILE: time in logic, draw, render
 
 static int eg_int (AVal v) {
     return a_isnum(v) ? (int) a_dbl(v) : 0;
@@ -293,10 +295,124 @@ static void eg_canvas_out (EgCanvas* cv) {
     SDL_UpdateTexture(cv->out, NULL, px, EG_W*4);
 }
 
+static Uint64 EG_PROF2[4];
+
+// The composition of the screen canvases on the CPU, for the software
+// renderer, which scales textures slowly: each canvas is read back once
+// (its content is premultiplied, as LÖVE's), and blended per pixel of the
+// window, over the background color, with the shadow under the canvas
+// that has one (1.5 game pixels down and right, half transparent).
+#define EG_DIV255(v) ((((v) + 128) + (((v) + 128) >> 8)) >> 8)
+static SDL_Texture* EG_OUT = NULL;          // the window, streaming
+static Uint8* EG_CPX[EG_CANVASES];          // the canvases read back
+static Uint8* EG_SPX = NULL;                // the shadow read back
+static Uint32* EG_WPX = NULL;               // the window
+
+static void eg_compose_cpu (void) {
+    int S = EG_SCALE, WW = EG_W*S, WH = EG_H*S;
+    if (EG_OUT == NULL) {
+        EG_OUT = SDL_CreateTexture(EG_REN, SDL_PIXELFORMAT_RGBA32,
+                                   SDL_TEXTUREACCESS_STREAMING, WW, WH);
+        EG_WPX = malloc(WW*WH*4);
+        EG_SPX = malloc(EG_W*EG_H*4);
+    }
+    for (int i=0; i<EG_CVS_N; i++) {
+        EgCanvas* cv = &EG_CVS[i];
+        if (!cv->screen) continue;
+        if (EG_CPX[i] == NULL) EG_CPX[i] = malloc(EG_W*EG_H*4);
+        SDL_SetRenderTarget(EG_REN, cv->tex);
+        SDL_RenderReadPixels(EG_REN, NULL, SDL_PIXELFORMAT_RGBA32, EG_CPX[i], EG_W*4);
+        if (cv->shadow) {
+            eg_render(cv, EG_SHADOW, 1);
+            SDL_RenderReadPixels(EG_REN, NULL, SDL_PIXELFORMAT_RGBA32, EG_SPX, EG_W*4);
+        }
+    }
+    Uint64 t1 = SDL_GetPerformanceCounter();
+    int off = (int)(1.5*S + 0.5);           // the shadow, in window pixels
+    // under: the canvases before the one with a shadow, over the color of
+    // the background, per game pixel (opaque); top: that canvas
+    static Uint8 under[EG_W*EG_H*3];
+    int top = -1;
+    for (int i=0; i<EG_CVS_N; i++) {
+        if (EG_CVS[i].screen && EG_CVS[i].shadow) top = i;
+    }
+    for (int k=0; k<EG_W*EG_H; k++) {
+        int r = EG_BG.r, g = EG_BG.g, b = EG_BG.b;
+        for (int i=0; i<EG_CVS_N; i++) {
+            if (!EG_CVS[i].screen || i == top) continue;
+            Uint8* p = &EG_CPX[i][k*4];
+            int ia = 255 - p[3];
+            r = p[0] + EG_DIV255(r*ia);
+            g = p[1] + EG_DIV255(g*ia);
+            b = p[2] + EG_DIV255(b*ia);
+        }
+        under[k*3+0] = r > 255 ? 255 : r;
+        under[k*3+1] = g > 255 ? 255 : g;
+        under[k*3+2] = b > 255 ? 255 : b;
+    }
+    for (int y=0; y<WH; y++) {
+        int gy = y / S;
+        int sy = (y - off) / S;
+        int sy_ok = (y - off) >= 0;
+        Uint8* row = (Uint8*) &EG_WPX[y*WW];
+        for (int x=0; x<WW; x++) {
+            int gx = x / S;
+            int k = gy*EG_W + gx;
+            int r = under[k*3+0], g = under[k*3+1], b = under[k*3+2];
+            if (top >= 0) {
+                if (sy_ok && x >= off) {
+                    Uint8* q = &EG_SPX[(sy*EG_W + (x - off)/S)*4];
+                    int a = (q[3]*128) / 255;
+                    if (a) {
+                        r = EG_DIV255(q[0]*a + r*(255 - a));
+                        g = EG_DIV255(q[1]*a + g*(255 - a));
+                        b = EG_DIV255(q[2]*a + b*(255 - a));
+                    }
+                }
+                Uint8* p = &EG_CPX[top][k*4];
+                int ia = 255 - p[3];
+                r = p[0] + EG_DIV255(r*ia);
+                g = p[1] + EG_DIV255(g*ia);
+                b = p[2] + EG_DIV255(b*ia);
+            }
+            Uint8* o = &row[x*4];
+            o[0] = r > 255 ? 255 : r;
+            o[1] = g > 255 ? 255 : g;
+            o[2] = b > 255 ? 255 : b;
+            o[3] = 255;
+        }
+    }
+    Uint64 t2 = SDL_GetPerformanceCounter();
+    SDL_UpdateTexture(EG_OUT, NULL, EG_WPX, WW*4);
+    SDL_SetRenderTarget(EG_REN, NULL);
+    SDL_RenderCopy(EG_REN, EG_OUT, NULL, NULL);
+    Uint64 t3 = SDL_GetPerformanceCounter();
+    EG_PROF2[3] += t2 - t1;
+    EG_PROF2[1] += t3 - t2;
+}
+
 static void eg_frame (void) {
     for (int i=0; i<EG_CVS_N; i++) {
+        Uint64 a = SDL_GetPerformanceCounter();
         eg_render(&EG_CVS[i], EG_CVS[i].tex, 0);
-        eg_canvas_out(&EG_CVS[i]);
+        Uint64 b = SDL_GetPerformanceCounter();
+        if (EG_PREMUL_OK || !EG_CVS[i].screen) {
+            eg_canvas_out(&EG_CVS[i]);      // drawn by the GPU or into another canvas
+        }
+        Uint64 c = SDL_GetPerformanceCounter();
+        EG_PROF2[0] += b - a;
+        EG_PROF2[1] += c - b;
+    }
+    Uint64 d = SDL_GetPerformanceCounter();
+    if (!EG_PREMUL_OK) {
+        eg_compose_cpu();
+        EG_PROF2[2] += SDL_GetPerformanceCounter() - d;
+        for (int i=0; i<EG_CVS_N; i++) {
+            EG_CVS[i].vs_n = 0;
+            EG_CVS[i].rs_n = 0;
+        }
+        EG_TOP = 0;
+        return;
     }
     SDL_SetRenderTarget(EG_REN, NULL);
     SDL_SetRenderDrawColor(EG_REN, EG_BG.r, EG_BG.g, EG_BG.b, 255);
@@ -315,6 +431,7 @@ static void eg_frame (void) {
         }
         SDL_RenderCopyF(EG_REN, cv->out, NULL, &r);
     }
+    EG_PROF2[2] += SDL_GetPerformanceCounter() - d;
     for (int i=0; i<EG_CVS_N; i++) {
         EG_CVS[i].vs_n = 0;
         EG_CVS[i].rs_n = 0;
@@ -1031,6 +1148,19 @@ static AStatus eg_script (const char* var, int tick) {
     return st;
 }
 
+// Whether SNX_SHOT has a screenshot at this tick.
+static int eg_shot_due (int tick) {
+    const char* s = getenv("SNX_SHOT");
+    while (s != NULL && *s != '\0') {
+        if (atoi(s) == tick) {
+            return 1;
+        }
+        s = strchr(s, ',');
+        if (s != NULL) s++;
+    }
+    return 0;
+}
+
 // The driver. Each loop is one tick of 1/60 s, as the original:
 //
 //   - the events of SDL and of the test script:
@@ -1048,6 +1178,9 @@ static AStatus eg_script (const char* var, int tick) {
 //   SNX_INPUT, SNX_SHOT  the test script (see `eg_script`)
 //   SNX_MUTE=1         no audio
 //   SNX_SCALE=n        window pixels per game pixel (default 2)
+//   SNX_RENDER=1       in test mode, renders every frame (by default, only
+//                      the frames of the screenshots)
+//   SNX_PROFILE=1      prints the time spent in logic, drawing, and rendering
 //   SNX_RENDERER=name  a render driver of SDL (default: software in test
 //                      mode, the best one otherwise)
 int main (int argc, char** argv) {
@@ -1066,6 +1199,7 @@ int main (int argc, char** argv) {
         frames = atoi(getenv("SNX_FRAMES"));
         EG_TEST = 1;
     }
+    EG_RENDER_ALL = getenv("SNX_RENDER") != NULL;
     if (getenv("SNX_SCALE") != NULL && atoi(getenv("SNX_SCALE")) > 0) {
         EG_SCALE = atoi(getenv("SNX_SCALE"));
     }
@@ -1109,6 +1243,7 @@ int main (int argc, char** argv) {
     int quit = 0;
     for (int tick=1; st==A_OK && !quit && atm_alive(); tick++) {
         EG_TICK = tick;
+        Uint64 p0 = SDL_GetPerformanceCounter();
         SDL_Event e;
         while (st==A_OK && SDL_PollEvent(&e)) {
             switch (e.type) {
@@ -1160,12 +1295,29 @@ int main (int argc, char** argv) {
         }
 
         // screen
+        Uint64 p1 = SDL_GetPerformanceCounter();
         if (st == A_OK) {
             st = eg_emit("draw", NULL, 0, 0, -1);
-            eg_frame();
-            eg_script("SNX_SHOT", tick);
-            SDL_RenderPresent(EG_REN);
         }
+        Uint64 p2 = SDL_GetPerformanceCounter();
+        if (st == A_OK) {
+            // in test mode, only the frames of the screenshots are rendered
+            if (!EG_TEST || EG_RENDER_ALL || eg_shot_due(tick)) {
+                eg_frame();
+                eg_script("SNX_SHOT", tick);
+                SDL_RenderPresent(EG_REN);
+            } else {
+                for (int i=0; i<EG_CVS_N; i++) {
+                    EG_CVS[i].vs_n = 0;
+                    EG_CVS[i].rs_n = 0;
+                }
+                EG_TOP = 0;
+            }
+        }
+        Uint64 p3 = SDL_GetPerformanceCounter();
+        EG_PROF[0] += p1 - p0;      // events and time: the logic
+        EG_PROF[1] += p2 - p1;      // :draw: the shapes
+        EG_PROF[2] += p3 - p2;      // rendering and composing
 
         if (frames>0 && tick>=frames) {
             quit = 1;
@@ -1180,6 +1332,13 @@ int main (int argc, char** argv) {
         }
     }
 
+    if (getenv("SNX_PROFILE") != NULL) {
+        double f = (double) SDL_GetPerformanceFrequency();
+        fprintf(stderr, "ticks: %d, logic: %.3fs, draw: %.3fs, render: %.3fs\n",
+            EG_TICK, EG_PROF[0]/f, EG_PROF[1]/f, EG_PROF[2]/f);
+        fprintf(stderr, "  canvases: %.3fs, unpremultiply/copy: %.3fs, compose: %.3fs (blend %.3fs)\n",
+            EG_PROF2[0]/f, EG_PROF2[1]/f, EG_PROF2[2]/f, EG_PROF2[3]/f);
+    }
     if (st == A_OK) {
         st = atm_stop();
     }
