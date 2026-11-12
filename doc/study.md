@@ -673,8 +673,18 @@ task ShowHp (u, n) {
 }
 ```
 
-and a hit spawns them: `spawn HfxUse(u.hit, 0.25, 200, 10)` and
-`spawn ShowHp(u)`.
+and a hit spawns them into a pool of the unit, declared at the top of
+its task:
+
+```
+pin fxs = tasks()
+...
+loop e on :Hit until it.to == u {
+    spawn @fxs HfxUse(u.hit, 0.25, 200, 10)
+    spawn @fxs ShowHp(u)
+    ...
+}
+```
 
 ### Analysis
 
@@ -688,6 +698,19 @@ to end).
 The counter is still a variable that the drawing reads. It is not a
 flag set in one place and cleared in another, though: each task
 increments and decrements it around its own wait.
+
+The pool matters. A task spawned with no pool belongs to the block
+where it is spawned, and the body of a loop is a block that ends at
+each iteration: `spawn HfxUse(...)` written in the body of `loop e on
+:Hit` was aborted as soon as the reaction to the hit ended, and its
+`defer` undid the flash before any frame was drawn. The first version
+of the port had this mistake in 29 places (the flashes, the bars of hp,
+the attacks of the units, which never ran, and of the elites), and no
+test caught it, since the traces only recorded hits and deaths
+(`doc/compiler.md`, 7). In the original, the timer belongs to the
+object (`self.t`), whatever the code that starts it; in Atmos, the owner
+of a task is where it is spawned, and a pool names an owner other than
+the current block.
 
 ---
 

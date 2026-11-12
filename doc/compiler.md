@@ -12,6 +12,7 @@ where it was seen, and its status.
 | 4 | `pub` accepted as a name | fixed in `9ec67ec`: a compile error |
 | 5 | A hang when the program ends inside an emit | fixed in `9ec67ec` |
 | 6 | `await :all` on an empty pool | as the reference Atmos; a question for the author |
+| 7 | A spawn in a loop or an `if` ends with its block, silently | by design; a warning would help |
 
 The port follows `main` of the compiler; it was at `995c3b2` when the
 three fixes arrived.
@@ -181,3 +182,46 @@ next one forever. The port guards it: `if #ts > 0 { await :all ts }`.
 Status: the reference Atmos does the same (it awakes on the end of a
 task of the pool). Whether an empty pool satisfies it at once is a
 question raised to the author. The port keeps its guard.
+
+## 7. A task spawned in a loop or an `if` ends with its block, silently
+
+Seen at `995c3b2`.
+
+```
+task T (n) {
+    defer { print("T", n, "aborted") }
+    await :go
+    print("T", n, "got go")
+}
+loop i in 2 {
+    spawn T(i)          ;; aborted at the end of each iteration
+}
+if true {
+    spawn T(2)          ;; aborted at the end of the if
+}
+emit @:global :go       ;; nobody gets it
+```
+
+A task spawned with no pool belongs to the block where it is spawned,
+and the body of a loop, of an `if`, or of a branch of `ifs` or `match`
+is a block. So a spawn there is aborted when the block ends, at once if
+the task awaits anything. This is the rule of structured lifetimes, and
+the manual shows it with a `do` block (the tasks spawned in it are
+aborted at its end); but nothing points at it in the code, and the
+mistake is easy, since in the original the timers that the port replaces
+belong to the object, wherever the code that starts them is.
+
+The port had it in 29 places for a while: the units never attacked
+(`spawn Character(...)` in an `if`, and `spawn Shoot(...)` in a loop),
+the flashes of the hits never showed, and the elites never attacked.
+The tests did not catch it, since the traces only showed hits and
+deaths. It was found when a test of the crits of the rogues printed
+none.
+
+What the port does: each such task goes to a pool of its owner
+(`spawn @fxs HfxUse(...)`), or is awaited in a `spawn { ... }` at the top
+of the task. A small script lists the spawns with no pool in a nested
+block (the only one left is meant: a screen pinned in `main.atm`).
+
+What would help: a warning for a spawn with no pool as the last
+statement of a block, or in a block that ends without awaiting it.
