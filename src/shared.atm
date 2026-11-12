@@ -84,16 +84,6 @@ task Stars () {
     }
 }
 
-;;; SOUNDS ;;;
-
-val ui_hover1      = sound("bamboo_hit_by_lord.ogg")
-val ui_switch1     = sound("Switch.ogg")
-val ui_switch2     = sound("Switch 3.ogg")
-val ui_transition1 = sound("Wind Bolt 8.ogg")
-val ui_transition2 = sound("Wind Bolt 12.ogg")
-val pop1           = sound("Pop sounds 10.ogg")
-val pop2           = sound("467951__benzix2__ui-button-click.ogg")
-
 ;;; TRANSITION ;;;
 
 ;; As `TransitionEffect`: a circle grows from (x,y) until it covers the
