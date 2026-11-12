@@ -934,3 +934,98 @@ It also found a factor it had missed: the update scales the interval of
 the shooter by `1 - min(0.02*level, 0.25)` through the tag of its timer
 (`set_every_multiplier`, `enemies.lua:289-290`); in the port, it is in
 the duration of the `await`.
+
+## 11. The shop: who changes what
+
+The shop has many objects that change the same data: a card buys a
+unit, a square of the party sells one, the reroll changes the cards, and
+the icons of the classes show counts of the units. Each change must
+reach every object that shows that data.
+
+### Lua + LÖVE
+
+```lua
+-- buy_screen.lua:1617-1633, the card buys itself
+if (self.selected and input.m1.pressed) or input[tostring(self.i)].pressed then
+  if self.parent:buy(self.unit, self.i) then
+    ui_switch1:play{...}
+    self:die()
+    self.parent.cards[self.i] = nil
+    self.parent:refresh_cards()
+    self.parent.party_text:set_text({...})
+    locked_state = {locked = self.parent.locked, cards = {...}}
+    system.save_run(...)
+  else
+    error1:play{...}
+    self.spring:pull(0.2, 200, 10)
+    self.character_icon.spring:pull(0.2, 200, 10)
+    for _, ci in ipairs(self.class_icons) do ci.spring:pull(0.2, 200, 10) end
+  end
+end
+
+-- buy_screen.lua:1211-1221, the square of the party sells itself
+if self.selected and input.m2.pressed and not self.just_created then
+  _G[random:table{'coins1', 'coins2', 'coins3'}]:play{...}
+  if self.reserve then
+    self.parent:gain_gold(self:get_sale_price())
+    table.remove(self.parent.units, self.i)
+    self:die()
+    self.parent:set_party_and_sets()
+    self.parent:refresh_cards()
+    self.parent.party_text:set_text({...})
+    system.save_run(...)
+  else
+    ...   -- the same, for a copy, through self.parent.parent
+  end
+end
+```
+
+### Atmos
+
+```
+;; src/shop.atm, the card asks
+loop on :mouse.dn until it.but == 1 {
+    emit @shop :Shop.buy [ i=i ]
+}
+
+;; src/shop.atm, the shop decides, and says what changed
+buy && run.cards@(buy) => {
+    val ok = shop_buy(run, run.cards@(buy))
+    emit @:task :Shop.party
+    if ok {
+        emit @:task :Shop.bought [ i=buy ]
+        set run.cards@(buy) = false
+        emit @:task :Shop.gold
+    } else {
+        emit @:task :Shop.denied [ i=buy ]
+    }
+}
+```
+
+### Analysis
+
+In the original, the object under the mouse does the work of the
+screen: the card calls `buy`, removes itself from the cards of its
+parent, and refreshes the other cards, the text of the party, and the
+save; the square of the party does the same for a sale. Each writer must
+know every reader, and the same lines repeat in the card, the square,
+the copies of a square (`self.parent.parent`), the reroll, and the level
+button: `buy_screen.lua` sets the text of the gold in seven places and
+saves the run in thirteen.
+
+In the port, the objects under the mouse only ask (`:Shop.buy`,
+`:Shop.sell`, `:Button.click`), and the shop is the one writer of the
+run. After a change, the shop says what changed (`:Shop.party`,
+`:Shop.gold`, `:Shop.bought`, `:Shop.denied`), and each part of the
+screen awaits the events that concern it: the party is a task rebuilt
+on `:Shop.party`, a card ends on its `:Shop.bought` and bounces on its
+`:Shop.denied`, and the text of the gold restarts its `nudge_down` on
+`:Shop.gold`. The cards and the icons of the classes need no refresh:
+they read the units when they draw.
+
+The flags of the objects of the shop become phases, as the button of
+section 3: `selected` of the card is the phase *over*, during which the
+card pulses (two tweens in a loop, where the original cancels three
+tagged tweens on exit); `just_created` of a square is a task that
+clears a local after 0.1 s. One flag remains as a local of the card,
+`selected`, read by its drawing, which runs beside the phases.

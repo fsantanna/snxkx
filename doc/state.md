@@ -33,11 +33,19 @@ a time, in the parts that the port covers, with what became of each one.
 | `Seeker.last_headbutt_time` | `enemies.lua:182, 184, 194` | 10 s between headbutts | gone: `await WaitReal(10)` beside the dash |
 | `Seeker.shooting` | `enemies.lua:222, 308` | the shooter aims instead of chasing | the count `e.aiming` |
 | `Seeker.speed_boosting` (a timestamp, with a tagged timer) | `enemies.lua:269-277, 719-720` | the factor of a speed boost, and its end | gone as a timestamp: a task (`SpeedBoosts`) with the time in a local; the factor `e.boost` remains |
+| `ShopCard.selected` | `buy_screen.lua:1617, 1638, 1651, 1659-1662` | the look of a card, its pulse, and whether a click buys it | the phase *over* of the card, with a local read by its drawing |
+| `ShopCard.owned`, `ShopCard.owned_n` (set by `refresh`) | `buy_screen.lua:1597-1611` | the marks of the copies in the party, refreshed by every writer | gone: computed when the card draws (`owned_marks`) |
+| `CharacterPart.just_created` | `buy_screen.lua:1162-1163, 1211` | no sale in the first 0.1 s of a square | a local, cleared by a task after 0.1 s |
+| `selected` of the buttons of the shop (reroll, lock, level, GO) | `buy_screen.lua:706, 717, 733, 741, 769, 789, 797, 822-872, 996-1040` | the look, and whether a click counts | gone: the phases of `ShopButton` |
+| `GoButton.transitioning` | `buy_screen.lua:690, 709` | GO starts the level once | gone: after GO, the shop awaits forever, until the transition aborts it |
+| `locked_state` (a global) | `buy_screen.lua:61, 136, 173, 703, 763-765, 1625` | the cards kept for the next shop, rewritten by four writers | the fields `run.locked` and `run.cards`, written by the shop only |
 
-Count so far: 29 variables in the original (counting the nine flags of
-the steering as one), 2 counters and 2 fields for the HUD in the port,
-and 3 fields that one task shows to another (`aiming`, a count shared by
-two attacks; `headbutting`; `boost`).
+Count so far: 36 variables in the original (counting the nine flags of
+the steering as one, and the `selected` of the four buttons of the shop
+as one), 2 counters and 2 fields for the HUD in the port,
+2 locals (`selected` of a card, `created` of a square), 2 fields of the
+run (`locked`, `cards`), and 3 fields that one task shows to another
+(`aiming`, a count shared by two attacks; `headbutting`; `boost`).
 
 The two counters are state, but not a flag guarding a phase: each
 counts tasks that are running, and a task restarts the effect by simply
