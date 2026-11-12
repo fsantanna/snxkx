@@ -127,6 +127,9 @@ function bench.install ()
 
   function system.load_state () state = {} end
   function system.save_state () end
+  -- no saved run: "arena run" always starts a new one
+  function system.load_run () return {} end
+  function system.save_run () end
 
   local after = Trigger.after
   function Trigger:after (delay, action, tag)
