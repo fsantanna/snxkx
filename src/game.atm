@@ -1,0 +1,21 @@
+;; All of the game, with nothing running: `main.atm` and the tests
+;; include it.
+
+include "../eng/eng.atm"
+include "../eng/random.atm"
+include "../eng/color.atm"
+include "../eng/anim.atm"
+include "../eng/text.atm"
+include "../eng/phys.atm"
+include "../eng/steer.atm"
+include "data.atm"
+include "sounds.atm"
+include "shared.atm"
+include "fx.atm"
+include "input.atm"
+include "button.atm"
+include "menu.atm"
+include "unit.atm"
+include "snake.atm"
+include "seeker.atm"
+include "arena.atm"

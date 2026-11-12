@@ -1,0 +1,130 @@
+;; The arena, as `Arena` of the original (`arena.lua`): walls around 80%
+;; of the screen, the snake, and its enemies, in a physics world.
+;;
+;; The arena is a record shared by its entities (`main.current` of the
+;; original): the world, the units of the snake in order, the enemies,
+;; and counters. Its layers are pools, drawn in order: the floor, the
+;; bodies, the covers of the walls, and the effects, through the camera.
+
+func new_arena (level, menu) {
+    [
+        level = level || 1, ng = 0, menu = menu,
+        units = [], enemies = [], path = [],
+        x1 = W/2 - 0.8*W/2, y1 = H/2 - 0.8*H/2,
+        x2 = W/2 + 0.8*W/2, y2 = H/2 + 0.8*H/2,
+        damage_dealt = 0, damage_taken = 0,
+    ]
+}
+
+;; The physics world of the arena, with the tags and filters of the
+;; original (`Arena:on_enter`).
+func arena_world () {
+    val w = phys_world(32, [:player, :enemy, :projectile, :enemy_projectile, :force_field, :ghost])
+    phys_disable(w, :player, :player)
+    phys_disable(w, :player, :projectile)
+    phys_disable(w, :player, :enemy_projectile)
+    phys_disable(w, :projectile, :projectile)
+    phys_disable(w, :projectile, :enemy_projectile)
+    phys_disable(w, :projectile, :enemy)
+    phys_disable(w, :enemy_projectile, :enemy)
+    phys_disable(w, :enemy_projectile, :enemy_projectile)
+    phys_disable(w, :player, :force_field)
+    phys_disable(w, :projectile, :force_field)
+    phys_disable(w, :ghost, :player)
+    phys_disable(w, :ghost, :projectile)
+    phys_disable(w, :ghost, :enemy)
+    phys_disable(w, :ghost, :enemy_projectile)
+    phys_disable(w, :ghost, :ghost)
+    phys_disable(w, :ghost, :force_field)
+    phys_trigger(w, :projectile, :enemy)
+    phys_trigger(w, :enemy_projectile, :player)
+    phys_trigger(w, :player, :enemy_projectile)
+    phys_trigger(w, :enemy_projectile, :enemy)
+    phys_trigger(w, :player, :ghost)
+    phys_trigger(w, :ghost, :player)
+    w
+}
+
+;; A wall: a static rectangle, drawn as `Wall` and `WallCover`.
+task Wall (A, x1, y1, x2, y2) {
+    val rec = [ kind=:wall ]
+    val cx = (x1 + x2)/2
+    val cy = (y1 + y2)/2
+    val hw = (x2 - x1)/2
+    val hh = (y2 - y1)/2
+    body(A.w, rec, :static, cx, cy, :solid, [:polygon, [-hw,-hh, hw,-hh, hw,hh, -hw,hh]])
+    defer {
+        body_free(A.w, rec.b)
+    }
+    val vs = rect_vertices(x1, y1, x2, y2)
+    loop on :draw {
+        eng.polygon(vs, bg@(-1))
+    }
+}
+
+;; The walls around the arena: the four rectangles of the original.
+func arena_walls (A) {
+    [
+        [-40, -40, A.x1, H + 40],
+        [A.x2, -40, W + 40, H + 40],
+        [A.x1, -40, A.x2, A.y1],
+        [A.x1, A.y2, A.x2, H + 40],
+    ]
+}
+
+;; An arena with a snake of `units` ([character, level] each), and the
+;; enemies of `enemies` ([x, y, level] each), for the tests until the
+;; waves come. It returns :died when the snake dies.
+task Arena (A, units, enemies) {
+    val w = arena_world()
+    set A.w = w
+    defer {
+        phys_world_free()
+    }
+
+    ;; the layers, through the camera
+    spawn {
+        loop on :draw {
+            cam_push()
+        }
+    }
+    pin floor   = tasks()
+    pin main    = tasks()
+    pin covers  = tasks()
+    pin effects = tasks()
+    spawn {
+        loop on :draw {
+            eng.pop()
+            eng.canvas_draw_outside(STARS, A.x1, A.y1, A.x2, A.y2, white@0)
+        }
+    }
+    pin ui = tasks()
+
+    loop _, r in arena_walls(A) {
+        spawn @main Wall(A, r@0, r@1, r@2, r@3)
+    }
+    spawn Stars()
+
+    loop i, c in units {
+        val u = [ character=c@0, level=c@1, index=i, leader=(i == 0) ]
+        if i == 0 {
+            set u.x = W/2
+            set u.y = H/2 + 16
+        }
+        set A.units@+ = u
+        spawn @main Unit(A, u, effects)
+    }
+    loop _, e in enemies || [] {
+        spawn @main Seeker(A, [x=e@0, y=e@1, level=e@2], effects)
+    }
+
+    par :any {
+        await :Arena.died
+        :died
+    } with {
+        ;; the world steps after all entities have moved
+        loop us on :clock {
+            phys_step(w, us / 1000000)
+        }
+    }
+}

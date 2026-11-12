@@ -1,16 +1,7 @@
 ;; SNKRX in Atmos: the screens, one after the other, under the
 ;; transitions between them.
 
-include "eng/eng.atm"
-include "eng/random.atm"
-include "eng/color.atm"
-include "eng/anim.atm"
-include "eng/text.atm"
-include "src/data.atm"
-include "src/sounds.atm"
-include "src/shared.atm"
-include "src/button.atm"
-include "src/menu.atm"
+include "src/game.atm"
 
 ;; A screen that is not ported yet: its name in the middle.
 task Todo (name) {
@@ -21,6 +12,9 @@ task Todo (name) {
 }
 
 spawn Background()
+spawn Camera()
+spawn Input()
+spawn SlowMotion()
 
 par {
     ;; the screens: each one runs until it asks for the next one, and the

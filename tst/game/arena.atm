@@ -1,0 +1,13 @@
+;; The arena with a snake of three and three seekers, with no input: the
+;; snake goes straight, bounces on the walls, and fights the seekers.
+include "../../src/game.atm"
+
+spawn Background()
+spawn Camera()
+spawn Input()
+spawn SlowMotion()
+
+val A = new_arena(1)
+val r = await Arena(A, [["vagrant", 1], ["swordsman", 1], ["archer", 1]],
+                       [[200, 60, 1], [300, 200, 1], [100, 200, 1]])
+print(eng.tick(), r)
