@@ -1,0 +1,1 @@
+SNX_FRAMES=260

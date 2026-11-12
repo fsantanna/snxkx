@@ -1,0 +1,48 @@
+;; Steering: three bodies that seek the same point while they separate
+;; (radius 16), and a body that wanders. Positions every 60 ticks.
+
+include "../../eng/eng.atm"
+include "../../eng/random.atm"
+include "../../eng/phys.atm"
+include "../../eng/steer.atm"
+
+pin w = phys_world(32, [:enemy])
+phys_disable(w, :enemy, :enemy)
+val f = \(v) { string.format("%.1f", v) }
+
+val rs = []
+val ss = []
+loop i in 3 {
+    val r = []
+    body(w, r, :dynamic, 100 + i, 100, :enemy, [:rect, 14, 6])
+    set rs@+ = r
+    set ss@+ = steerable(r.b, 100, 2000, 2*math.pi, 2)
+}
+val wr = []
+body(w, wr, :dynamic, 240, 200, :enemy, [:rect, 14, 6])
+val ws = steerable(wr.b, 50, 1000, 2*math.pi, 2)
+body_set(wr.b, :velocity, 30, 0)    ;; a heading to start from
+
+loop us on :clock {
+    loop _, r in rs {
+        set r.x, r.y = body_pos(r.b)
+    }
+    loop i, st in ss {
+        steer_update(st)
+        seek_point(st, 200, 100)
+        separate(st, 16, rs)
+    }
+    steer_update(ws)
+    wander(ws, 50, 100, 20)
+    phys_step(w, us/1000000)
+    if eng.tick() % 60 == 0 {
+        val out = [eng.tick()]
+        loop _, r in rs {
+            set out@+ = f(r.x) ++ "," ++ f(r.y)
+        }
+        val x, y = body_pos(wr.b)
+        set out@+ = "wander " ++ f(x) ++ "," ++ f(y)
+        print(vector.join(out, "  "))
+    }
+    until eng.tick() == 240
+}
