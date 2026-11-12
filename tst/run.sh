@@ -4,6 +4,7 @@
 #   tst/run.sh            runs and compares with the stored results
 #   tst/run.sh update     stores the new results as the expected ones
 #   ASAN=1 tst/run.sh     the same, with the address sanitizer
+#   TST_TIMEOUT=s         kills a test after s seconds (default 600)
 #
 # Each test is a program `tst/[dir/]X.atm`, run from the root:
 #   - its output is compared with `X.out`;
@@ -36,7 +37,8 @@ for t in tst/*.atm tst/*/*.atm; do
             set +a
         fi
         [ -z "$SNX_MUTE" ] && unset SNX_MUTE
-        "$ATMOS" "$t"
+        # a test that does not end is killed
+        timeout -k 10 "${TST_TIMEOUT:-600}" "$ATMOS" "$t" || echo "(exit $?)"
     ) > "$OUT/$n.got" 2>&1 < /dev/null
     if [ "$UPDATE" = 1 ]; then
         cp "$OUT/$n.got" "$base.out"
