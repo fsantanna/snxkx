@@ -95,3 +95,49 @@ the argument. The error comes later, far from the cause.
 What the port does: no variable is named `pub`.
 
 What would help: a compile error for `pub` as a name.
+
+## 5. The program hangs when it ends inside an emit from an awaited task
+
+Seen at `2f45211`.
+
+```
+task Item () { await(false) }
+task Inner (ui) {
+    spawn @ui Item()
+    await 1s
+    emit @:global :done
+    await(false)
+}
+task Outer () {
+    pin ui = tasks()
+    await Inner(ui)
+}
+spawn Outer()
+await :done
+print("main ends")
+```
+
+The main chunk awakes on `:done` and ends, which aborts `Outer` while
+`Inner`, awaited by `Outer`, is still inside its `emit`. The abort never
+returns: the program spins in `a_blk_xfer` (`rt/task.c:1958`), with no
+output, and does not react to SIGTERM. Without the `spawn @ui` in
+`Inner`, or with `spawn Inner(ui)` instead of `await Inner(ui)`, or with
+an `await 1s` after the `print`, it ends normally.
+
+The port met it in a test whose main chunk ended on the event that ends
+a level (`tst/game/level.atm`). The game itself does not end that way.
+
+What the port does: the test awaits a moment before it ends.
+
+## 6. `await :all` on an empty pool never awakes
+
+Seen at `2f45211`.
+
+```
+pin ts = tasks()
+await :all ts           ;; never awakes
+```
+
+`await :all ts` awaits the pool to drain, including tasks spawned into
+it while it awaits, but on a pool that is already empty it awaits the
+next one forever. The port guards it: `if #ts > 0 { await :all ts }`.
