@@ -53,10 +53,10 @@ func phys_trigger (w, t1, t2) {
 ;; A body at (x,y), as `set_as_circle`,
 ;; `set_as_rectangle`, or `set_as_polygon`: `shape` is [:circle, r],
 ;; [:rect, w, h], or [:polygon, [x1,y1,...]] (points relative to x,y).
-;; `type` is :static, :kinematic, or :dynamic. `pub` is the public
+;; `type` is :static, :kinematic, or :dynamic. `rec` is the public
 ;; record of the body, which other bodies receive in their events; its
 ;; field `b` is set to the body.
-func body (w, pub, type, x, y, tag, shape) {
+func body (w, rec, type, x, y, tag, shape) {
     val t = w.tags@(tag)
     val k = match type { :static => 0 ; :kinematic => 1 ; else => 2 }
     val b = `:number pw_body(eg_int($k), eg_dbl($x), eg_dbl($y))`
@@ -91,9 +91,9 @@ func body (w, pub, type, x, y, tag, shape) {
             ```
         }
     }
-    set pub.b = b
-    set pub.tag = tag
-    set w.objs@(b) = pub
+    set rec.b = b
+    set rec.tag = tag
+    set w.objs@(b) = rec
     b
 }
 
