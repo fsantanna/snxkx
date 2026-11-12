@@ -113,8 +113,9 @@ func angle_to (u, x, y) {
 }
 
 ;; A unit of the snake. `u` has `character` and `level`, and `x`, `y`,
-;; `r` for the leader. `fx` is the pool of the effects of the arena.
-task Unit (A, u, fx) {
+;; `r` for the leader. `fx` and `shots` are the pools of the effects and
+;; of the projectiles of the arena.
+task Unit (A, u, fx, shots) {
     set u.kind    = :player
     set u.classes = character_classes@(u.character)
     set u.color   = character_colors@(u.character)
@@ -133,6 +134,29 @@ task Unit (A, u, fx) {
         body_free(A.w, u.b)
     }
     spawn Springs(u.hit.s, u.shoot.s)
+    if !A.menu {
+        spawn Character(A, u, fx, shots)
+    }
+
+    ;; heals, as `Player:heal`
+    spawn {
+        loop e on :Heal until it.to == u {
+            spawn HfxUse(u.hit, 0.25, 200, 10)
+            spawn ShowHp(u, 1.5)
+            set u.hp = math.min(u.hp + e.amount, u.max_hp)
+            if u.chp {
+                spawn HfxUse(u.chp, 0.5)
+            }
+        }
+    }
+
+    ;; the stats with the buffs of the others, in every tick
+    spawn {
+        loop on :clock {
+            unit_buffs(A, u)
+            unit_stats(u, false, A.ng)
+        }
+    }
 
     spawn {
         loop on :draw {
@@ -150,7 +174,12 @@ task Unit (A, u, fx) {
             val o = e.other
             push(o, rfloat(25, 35)*(u.knockback_m || 1), angle_to(u, o.x, o.y))
             hit(o, if (u.character == "vagrant") || (u.character == "psykeeper") => 2*u.dmg => u.dmg)
-            hit(u, o.dmg)
+            if o.headbutting {
+                hit(u, (4 + math.floor(o.level/3))*o.dmg)
+                set o.headbutting = false
+            } else {
+                hit(u, o.dmg)
+            }
             spawn @fx HitCircle(e.x, e.y, [rs=6, color=fg@0, duration=0.1])
             loop _ in 2 {
                 spawn @fx HitParticle(e.x, e.y, [color=u.color])

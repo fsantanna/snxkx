@@ -48,7 +48,7 @@ task Quiet (foes, spawns) {
 ;; A wave of enemies at one of three places: a marker, and the enemies
 ;; 1.125s later. It lasts as the flag of the original, which counts 0.1s
 ;; per enemy, and more.
-task WaveGroup (A, n, foes, fx) {
+task WaveGroup (A, n, foes, fx, shots) {
     val ps = [
         [x=A.x1 + 32, y=H/2], [x=W/2, y=H/2], [x=A.x2 - 32, y=H/2],
     ]
@@ -56,24 +56,24 @@ task WaveGroup (A, n, foes, fx) {
     par :all {
         await((n*0.1 + 0.5 + 0.75) * 1s)
     } with {
-        await MarkAndSpawn(A, p, n, false, foes, fx)
+        await MarkAndSpawn(A, p, n, false, foes, fx, shots)
     }
 }
 
 ;; A wave of distributed enemies: `n` patterns, one every 2s.
-task WaveDistributed (A, n, foes, fx) {
+task WaveDistributed (A, n, foes, fx, shots) {
     pin ds = tasks()
     loop i in n {
         if i > 0 {
             await 2s
         }
-        spawn @ds SpawnDistributed(A, foes, fx)
+        spawn @ds SpawnDistributed(A, foes, fx, shots)
     }
     await :all ds
 }
 
 ;; The countdown and the waves of a level, until the last wave is gone.
-task Waves (A, foes, spawns, fx) {
+task Waves (A, foes, spawns, fx, shots) {
     set A.max_waves = LEVEL_MAX_WAVES@(level_index(A.level))
     set A.wave = 0
     set A.start_time = 3
@@ -99,33 +99,74 @@ task Waves (A, foes, spawns, fx) {
         await 500ms
         if rbool(LEVEL_DISTRIBUTED@(level_index(A.level))) {
             val n = math.ceil((8 + (A.wave + math.min(A.loop*6, 60) - 1)*2)/7)
-            spawn @spawns WaveDistributed(A, n, foes, fx)
+            spawn @spawns WaveDistributed(A, n, foes, fx, shots)
         } else {
             val n = 8 + (A.wave + math.min(A.loop*12, 200) - 1)*2
-            spawn @spawns WaveGroup(A, n, foes, fx)
+            spawn @spawns WaveGroup(A, n, foes, fx, shots)
         }
+    }
+}
+
+;; The level of a boss (every sixth level), as the branch `boss_level`
+;; of `Arena:on_enter`: the countdown, the boss at the center, and a wave
+;; whenever only the boss is left, until the boss is dead and the arena
+;; is quiet.
+task BossWaves (A, foes, spawns, fx, shots) {
+    set A.boss_level = true
+    set A.start_time = 3
+    await 1s
+    loop _ in 3 {
+        await 1s
+        if A.start_time > 1 {
+            play(alert1, [volume=0.5])
+        }
+        set A.start_time -= 1
+        spawn HfxUse(A.cond1, 0.25, 200, 10)
+    }
+    play(alert1, [pitch=1.2, volume=0.5])
+    shake(4, 0.25)
+    spawn @fx SpawnCircle(W/2, H/2 - 48, red@0, fx)
+    await SpawnEffect(W/2, H/2, nil, fx)
+    play(spawn1, [pitch=rfloat(0.8, 1.2), volume=0.15])
+    spawn @fx SpawnMarker(W/2, H/2)
+    await 1125ms
+    val boss = [ x=W/2, y=H/2, level=A.level, boss=level_to_boss@(A.level) ]
+    spawn @foes Seeker(A, boss, fx, shots)
+    val n = 8 + math.floor(A.level/2)
+    loop {
+        ;; only the boss left, or nobody, and no spawning
+        loop on :clock {
+            val alive = X.xin(boss, A.enemies)
+            until (#spawns == 0) && ((alive && (#foes <= 1)) || (!alive && (#foes == 0)))
+        }
+        until !X.xin(boss, A.enemies)
+        trace("wave", "boss")
+        spawn HfxUse(A.cond1, 0.25, 200, 10)
+        spring_pull(A.cond2.s, 0.0625)
+        await 500ms
+        spawn @spawns WaveGroup(A, n, foes, fx, shots)
     }
 }
 
 ;; Every 8s, the enemies that could not spawn over a body come back, in
 ;; groups of a quarter at four places (`enemy_spawns_prevented`).
-task Respawns (A, foes, spawns, fx) {
+task Respawns (A, foes, spawns, fx, shots) {
     loop {
         await 8s
         val q = math.floor(A.spawns_prevented/4)
         if (#spawns == 0) && (q > 0) {
-            spawn @spawns RespawnGroup(A, q, foes, fx)
+            spawn @spawns RespawnGroup(A, q, foes, fx, shots)
             set A.spawns_prevented = 0
         }
     }
 }
 
 ;; The groups of `Respawns`, which last as the flag of the original.
-task RespawnGroup (A, q, foes, fx) {
+task RespawnGroup (A, q, foes, fx, shots) {
     par :all {
         await((1.125 + q*0.25) * 1s)
     } with {
-        await MarkAndSpawnK(A, spawn_points(A), 4, q, true, foes, fx)
+        await MarkAndSpawnK(A, spawn_points(A), 4, q, true, foes, fx, shots)
     }
 }
 
@@ -139,6 +180,11 @@ task Hud (A) {
             eng.push(W/2, H/2 - 48, 0, A.cond1.s.x)
             print_centered(fat_font, tostring(A.start_time), W/2, H/2 - 48, 0, 1, 1,
                            if A.cond1.f > 0 => fg@0 => red@0)
+            eng.pop()
+          }
+          A.boss_level => {
+            eng.push(A.x2 - 106, A.y1 - 10, 0, A.cond2.s.x)
+            print_centered(fat_font, "kill the elite", A.x2 - 106, A.y1 - 10, 0, 0.6, 0.6, fg@0)
             eng.pop()
           }
           A.max_waves => {

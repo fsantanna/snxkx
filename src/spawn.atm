@@ -104,19 +104,19 @@ func spawn_blocked (A, x, y) {
 ;; 0.1s, each after a spawn effect; elites with the odds of the level. An
 ;; enemy that would spawn over another body does not, and is counted in
 ;; `A.spawns_prevented`, unless `pass`.
-task SpawnN (A, p, n, pass, foes, fx) {
+task SpawnN (A, p, n, pass, foes, fx, shots) {
     val offsets = [[-12, -12], [12, -12], [12, 12], [-12, 12], [0, 0]]
     pin ss = tasks()
     loop i in (n || 4) {
         await 100ms
         val o = offsets@(i % 5)
-        spawn @ss SpawnOne(A, p.x + o@0, p.y + o@1, pass, foes, fx)
+        spawn @ss SpawnOne(A, p.x + o@0, p.y + o@1, pass, foes, fx, shots)
     }
     await :all ss
 }
 
 ;; One enemy of `SpawnN`, after its spawn effect.
-task SpawnOne (A, x, y, pass, foes, fx) {
+task SpawnOne (A, x, y, pass, foes, fx, shots) {
     await SpawnEffect(x, y, nil, fx)
     play(spawn1, [pitch=rfloat(0.8, 1.2), volume=0.15])
     if !pass && spawn_blocked(A, x, y) {
@@ -128,7 +128,7 @@ task SpawnOne (A, x, y, pass, foes, fx) {
             set sum += w
         }
         val elite = if rbool(sum) => (level_to_elite_spawn_types@(A.level))@(rweighted(ws)) => nil
-        spawn @foes Seeker(A, [x=x, y=y, level=A.level, elite=elite], fx)
+        spawn @foes Seeker(A, [x=x, y=y, level=A.level, elite=elite], fx, shots)
     }
 }
 
@@ -144,30 +144,30 @@ func spawn_points (A) {
 }
 
 ;; A marker at a place, and `n` enemies there 1.125s later.
-task MarkAndSpawn (A, p, n, pass, foes, fx) {
+task MarkAndSpawn (A, p, n, pass, foes, fx, shots) {
     spawn @fx SpawnMarker(p.x, p.y)
     await 1125ms
-    await SpawnN(A, p, n, pass, foes, fx)
+    await SpawnN(A, p, n, pass, foes, fx, shots)
 }
 
 ;; Groups at `k` places, each one after 0 to 0.2s, `n` enemies each.
-task MarkAndSpawnK (A, ps, k, n, pass, foes, fx) {
+task MarkAndSpawnK (A, ps, k, n, pass, foes, fx, shots) {
     pin gs = tasks()
     loop _ in k {
-        spawn @gs MarkLater(A, ps, n, pass, foes, fx)
+        spawn @gs MarkLater(A, ps, n, pass, foes, fx, shots)
     }
     await :all gs
 }
 
 ;; A group of `MarkAndSpawnK`, 0 to 0.2s later, at a place taken from `ps`.
-task MarkLater (A, ps, n, pass, foes, fx) {
+task MarkLater (A, ps, n, pass, foes, fx, shots) {
     await((rfloat(0, 0.2)) * 1s)
-    await MarkAndSpawn(A, rtable_remove(ps), n, pass, foes, fx)
+    await MarkAndSpawn(A, rtable_remove(ps), n, pass, foes, fx, shots)
 }
 
 ;; As `spawn_distributed_enemies`: one of six patterns over the spawn
 ;; points, which lasts as the original's flag `spawning_enemies`.
-task SpawnDistributed (A, foes, fx) {
+task SpawnDistributed (A, foes, fx, shots) {
     val kinds = ["4", "4+4", "4+4+4", "2x4", "3x4", "4x2"]
     val kind = kinds@(rweighted([20, 20, 10, 15, 10, 15]))
     val ps = spawn_points(A)
@@ -175,40 +175,40 @@ task SpawnDistributed (A, foes, fx) {
         "4" => par :all {
             await 2250ms
         } with {
-            await MarkAndSpawn(A, rtable_remove(ps), 4, false, foes, fx)
+            await MarkAndSpawn(A, rtable_remove(ps), 4, false, foes, fx, shots)
         }
         "4+4" => par :all {
             await 4250ms
         } with {
             val p = rtable_remove(ps)
-            await MarkAndSpawn(A, p, 4, false, foes, fx)
+            await MarkAndSpawn(A, p, 4, false, foes, fx, shots)
             await 2s
-            await SpawnN(A, p, 4, false, foes, fx)
+            await SpawnN(A, p, 4, false, foes, fx, shots)
         }
         "4+4+4" => par :all {
             await 4250ms
         } with {
             val p = rtable_remove(ps)
-            await MarkAndSpawn(A, p, 4, false, foes, fx)
+            await MarkAndSpawn(A, p, 4, false, foes, fx, shots)
             await 1s
-            await SpawnN(A, p, 4, false, foes, fx)
+            await SpawnN(A, p, 4, false, foes, fx, shots)
             await 1s
-            await SpawnN(A, p, 4, false, foes, fx)
+            await SpawnN(A, p, 4, false, foes, fx, shots)
         }
         "2x4" => par :all {
             await 2250ms
         } with {
-            await MarkAndSpawnK(A, ps, 2, 4, false, foes, fx)
+            await MarkAndSpawnK(A, ps, 2, 4, false, foes, fx, shots)
         }
         "3x4" => par :all {
             await 2250ms
         } with {
-            await MarkAndSpawnK(A, ps, 3, 4, false, foes, fx)
+            await MarkAndSpawnK(A, ps, 3, 4, false, foes, fx, shots)
         }
         "4x2" => par :all {
             await 2250ms
         } with {
-            await MarkAndSpawnK(A, ps, 4, 2, false, foes, fx)
+            await MarkAndSpawnK(A, ps, 4, 2, false, foes, fx, shots)
         }
     }
 }
