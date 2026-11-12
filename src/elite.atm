@@ -1,0 +1,262 @@
+;; The elite seekers and the first boss, as the branches of `Seeker:init`
+;; of the original (`enemies.lua:5-260`): the speed booster, the
+;; exploder, the shooter, the headbutter, and the boss "speed_booster";
+;; with `EnemyProjectile`, `ExploderMine`, and `LightningLine`.
+;;
+;; An elite runs its attack beside its movement, as the original runs
+;; its timers beside its update. The two share one thing: whether the
+;; seeker aims (`e.aiming`, a count of the attacks that aim) instead of
+;; chasing.
+
+;; As `LightningLine`: a jagged line from one point to another, which
+;; thins out in 0.1s.
+task LightningLine (src, dst, color, fx) {
+    var lines = [ [src.x, src.y, dst.x, dst.y] ]
+    var off = 8
+    loop _ in 3 {
+        val next = []
+        loop _, l in lines {
+            val x1, y1, x2, y2 = l@0, l@1, l@2, l@3
+            val px, py = vnormalize(x2 - x1, y2 - y1)
+            val k = rfloat(-off, off)
+            val mx = (x1 + x2)/2 + (-py)*k
+            val my = (y1 + y2)/2 + px*k
+            set next@+ = [x1, y1, mx, my]
+            set next@+ = [mx, my, x2, y2]
+        }
+        set lines = next
+        set off = off/2
+    }
+    val pts = []
+    loop _, l in lines {
+        set pts@+ = l@0
+        set pts@+ = l@1
+    }
+    val st = [ w=3 ]
+    spawn @fx HitCircle(src.x, src.y, [rs=6, color=fg@0, duration=0.1])
+    loop _ in 2 {
+        spawn @fx HitParticle(src.x, src.y, [color=color])
+    }
+    spawn @fx HitCircle(dst.x, dst.y, [rs=6, color=fg@0, duration=0.1])
+    spawn @fx HitParticle(dst.x, dst.y, [color=color])
+    spawn {
+        loop on :draw {
+            eng.polyline(pts, color, st.w)
+        }
+    }
+    await Tween(0.1, st, [w=1], linear)
+}
+
+;; As `EnemyProjectile`: it flies along `r`, dies on a wall, and hits a
+;; unit (or, from a shooter, an enemy) that it crosses.
+task EnemyProjectile (A, p, fx) {
+    set p.kind = :enemy_projectile
+    set p.w = 10
+    set p.h = 4
+    body(A.w, p, :dynamic, p.x, p.y, :enemy_projectile, [:rect, 10, 4])
+    defer {
+        body_free(A.w, p.b)
+    }
+    spawn {
+        loop on :draw {
+            eng.push(p.x, p.y, p.r)
+            eng.rect(p.x, p.y, 10, 4, 2, 2, p.color)
+            eng.pop()
+        }
+    }
+    val dx, dy = par :any {
+        loop on :clock {
+            set p.x, p.y = body_pos(p.b)
+            body_set(p.b, :angle, p.r)
+            body_set(p.b, :velocity, p.v*math.cos(p.r), p.v*math.sin(p.r))
+        }
+    } with {
+        val e = await :collision.enter until (it.b == p.b) && (it.other.kind == :wall)
+        return (e.x, e.y)
+    } with {
+        loop e on :trigger.enter until it.b == p.b {
+            val o = e.other
+            ifs {
+                o.kind == :player => {
+                    hit(o, p.dmg)
+                    break (p.x, p.y)
+                }
+                (o.kind == :enemy) && (p.source == :shooter) => {
+                    hit(o, 0.5*p.dmg, [from_enemy=true])
+                    break (p.x, p.y)
+                }
+            }
+        }
+    }
+    loop _ in rint(2, 3) {
+        spawn @fx HitParticle(dx, dy, [r=rfloat(0, 2*math.pi), color=p.color])
+    }
+    spawn @fx HitCircle(dx, dy, [scale_down=true])
+    play(proj_hit_wall1, [pitch=rfloat(0.9, 1.1), volume=0.05])
+}
+
+;; As `ExploderMine`: a mine that ticks three times, 0.8s apart, and
+;; bursts into projectiles.
+task ExploderMine (A, x, y, src, fx, shots) {
+    val s = spring(1)
+    val h = hfx(1)
+    spawn Springs(s, h.s)
+    spawn {
+        loop on :draw {
+            eng.push(x, y, 0, s.x)
+            eng.circle(x, y, 2.5, if h.f > 0 => fg@0 => blue@0)
+            eng.pop()
+        }
+    }
+    await Tween(0.05, [t=0], [t=1], linear)
+    spring_pull(s, 0.15)
+    loop i in 3 {
+        await 800ms
+        play(mine1, [pitch=1 + i*0.1, volume=0.5])
+        spring_pull(s, 0.5, 200, 10)
+        spawn HfxUse(h, 0.5, 200, 10, 0.2)
+    }
+    play(shoot1, [pitch=rfloat(0.95, 1.05), volume=0.4])
+    play(cannoneer1, [pitch=rfloat(0.95, 1.05), volume=0.4])
+    loop _ in 4 {
+        spawn @fx HitParticle(x, y, [r=rfloat(0, 2*math.pi), color=blue@0])
+    }
+    spawn @fx HitCircle(x, y, [])
+    val n = 8
+    loop i in n {
+        spawn @shots EnemyProjectile(A, [x=x, y=y, color=blue@0, r=i*math.pi/(n/2),
+            v=120 + math.min(5*src.level, 300), dmg=1.3*src.dmg], fx)
+    }
+}
+
+;; As `Seeker:speed_boost(duration)`: the seeker runs faster, by a factor
+;; that falls from 3 to half of it along the boost. A new boost restarts.
+task SpeedBoosts (e) {
+    var b = await :SpeedBoost until it.to == e
+    loop {
+        set b = par :any {
+            await :SpeedBoost until it.to == e
+        } with {
+            val k = 3 + 0.015*e.level
+            var t = 0
+            loop us on :clock {
+                set t += us / 1000000
+                set e.boost = k*remap(t, 0, k, 1, 0.5)
+                until t > b.duration
+            }
+            set e.boost = 1
+            await :SpeedBoost until it.to == e
+        }
+    }
+}
+
+;; Boosts the seekers within 128 of `e` (up to `max`), with lines.
+task BoostAround (A, e, max, duration, fx) {
+    val es = []
+    loop _, o in enemies_in_circle(A, e.x, e.y, 128) {
+        if (o != e) && (#es < (max || 1000)) {
+            set es@+ = o
+        }
+    }
+    if #es > 0 {
+        play(buff1, [pitch=rfloat(0.95, 1.05), volume=0.5])
+        spawn @fx HitCircle(e.x, e.y, [rs=6, color=green@0, duration=0.1])
+        loop _, o in es {
+            spawn @fx LightningLine(e, o, green@0, fx)
+            emit @:global :SpeedBoost [ to=o, duration=duration ]
+        }
+    }
+}
+
+;; The attack of an elite, beside its movement, while it lives.
+task EliteAttack (A, e, fx, shots) {
+    match e.elite {
+        "speed_booster" => {
+            await((rfloat(16, 24)) * 1s)
+            hit(e, 10000)
+            await(false)
+        }
+        "exploder" => {
+            await((rfloat(16, 24)) * 1s)
+            hit(e, 10000)
+            await(false)
+        }
+        "shooter" => {
+            await((rfloat(2, 4)) * 1s)
+            set e.aiming += 1
+            loop {
+                await((rfloat(4, 6)) * 1s)
+                loop i in 3 {
+                    if i > 0 {
+                        await((math.max(1 - e.level*0.01, 0.25)*0.15) * 1s)
+                    }
+                    play(shoot1, [pitch=rfloat(0.95, 1.05), volume=0.1])
+                    spawn HfxUse(e.hit, 0.25, 200, 10, 0.1)
+                    val r = e.r
+                    spawn @fx HitCircle(e.x + 0.8*14*math.cos(r), e.y + 0.8*14*math.sin(r), [rs=6])
+                    spawn @shots EnemyProjectile(A, [x=e.x + 1.6*14*math.cos(r), y=e.y + 1.6*14*math.sin(r),
+                        color=fg@0, r=r, v=math.min(140 + 3.5*e.level, 300), dmg=e.dmg, source=:shooter], fx)
+                }
+            }
+        }
+        "headbutter" => {
+            val o_r, o_g, o_b = comps(orange@0)
+            val f_r, f_g, f_b = comps(fg@0)
+            val c = [ r=o_r, g=o_g, b=o_b ]
+            spawn {
+                loop on :clock {
+                    set e.color = rgba(c.r, c.g, c.b)
+                }
+            }
+            loop {
+                ;; near the leader, and 10s after the last headbutt
+                loop on :clock {
+                    val l = A.units@0
+                    until l && (math.sqrt((e.x - l.x)*(e.x - l.x) + (e.y - l.y)*(e.y - l.y)) < 76)
+                }
+                ;; charges for 2s, turning white
+                set e.aiming += 1
+                await Tween(2, c, [r=f_r, g=f_g, b=f_b], cubic_in_out)
+                set e.aiming -= 1
+                ;; and headbutts the leader
+                spawn Tween(0.25, c, [r=o_r, g=o_g, b=o_b], linear)
+                play(headbutt1, [pitch=rfloat(0.95, 1.05), volume=0.2])
+                set e.headbutting = true
+                body_set(e.b, :damping, 0)
+                val l = A.units@0
+                val a = if l => cmath.atan2(l.y - e.y, l.x - e.x) => e.r
+                await SteeringImpulse(e.st, 300, a, 0.75)
+                set e.headbutting = false
+                await 10s
+            }
+        }
+        else => await(false)
+    }
+}
+
+;; As `apply_steering_impulse(f, r, s)`: an impulse added to the velocity
+;; for `s` seconds, which fades in its second half.
+task SteeringImpulse (st, f, r, s) {
+    set st.ix = f*math.cos(r)
+    set st.iy = f*math.sin(r)
+    defer {
+        set st.ix = 0
+        set st.iy = 0
+    }
+    await((s/2) * 1s)
+    await Tween(s/2, st, [ix=0, iy=0], linear)
+}
+
+;; The attack of the boss "speed_booster": every 8s, it boosts up to four
+;; seekers around it. Its bar shows the time to the next one.
+task BossAttack (A, e, fx) {
+    loop {
+        var t = 0
+        loop us on :clock {
+            set t += us / 1000000
+            set e.attack_ratio = t/8
+            until t > 8
+        }
+        spawn BoostAround(A, e, 4, 3 + e.level*0.015, fx)
+    }
+}

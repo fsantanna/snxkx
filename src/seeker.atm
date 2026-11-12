@@ -7,9 +7,15 @@
 ;; original keeps `being_pushed` and `steering_enabled` for that; here
 ;; they are the two phases of a loop.
 
-;; As `Seeker:push(f, r)`: an impulse, a spin, and damping.
+;; As `Seeker:push(f, r)`: an impulse, a spin, and damping (a boss is
+;; pushed less).
 func seeker_push (e, f, r) {
-    val n = 1
+    val n = ifs {
+        e.boss && (e.level % 25 == 0) => 0.7
+        e.boss => 0.2
+        e.elite == "tank" => 0.7
+        else => 1
+    }
     set e.push_force = n*f
     body_set(e.b, :impulse, n*f*math.cos(r), n*f*math.sin(r))
     body_set(e.b, :angular_impulse,
@@ -18,22 +24,45 @@ func seeker_push (e, f, r) {
     body_set(e.b, :angular_damping, 1.5*(1/n))
 }
 
-;; A seeker. `e` has `x`, `y`, and `level`.
-task Seeker (A, e, fx) {
+;; The colors of the elites and bosses.
+val ELITE_COLORS = [
+    speed_booster=green@0, exploder=blue@0, shooter=fg@0, headbutter=orange@0,
+    tank=yellow@0, spawner=purple@0, swarmer=purple@0, forcer=yellow@0,
+]
+
+;; A seeker. `e` has `x`, `y`, and `level`, and maybe `elite` or `boss`
+;; (a name of the original).
+task Seeker (A, e, fx, shots) {
     trace("add", string.format("Seeker %.1f %.1f", e.x, e.y))
     set e.kind    = :enemy
-    set e.stats   = :seeker
-    set e.classes = [:seeker]
-    set e.color   = red@0
     set e.hit     = hfx(1)
     set e.hp_shown = 0
-    set e.w = 14
-    set e.h = 6
     set e.r = 0
+    set e.aiming = 0
+    set e.boost = 1
+    if e.boss {
+        set e.stats   = :boss
+        set e.classes = [:mini_boss]
+        set e.w = 18
+        set e.h = 7
+    } else {
+        set e.stats   = :seeker
+        set e.classes = [:seeker]
+        set e.w = 14
+        set e.h = 6
+    }
+    set e.color = ELITE_COLORS@(e.boss || e.elite) || red@0
     unit_stats(e, true, A.ng)
-    body(A.w, e, :dynamic, e.x, e.y, :enemy, [:rect, 14, 6])
+    body(A.w, e, :dynamic, e.x, e.y, :enemy, [:rect, e.w, e.h])
     body_restitution(e.b, 0.5)
-    val st = steerable(e.b, e.v, 2000, 4*math.pi, 4)
+    val st = if e.boss => steerable(e.b, e.v, 1000, 2*math.pi, 2) => steerable(e.b, e.v, 2000, 4*math.pi, 4)
+    set e.st = st
+    spawn SpeedBoosts(e)
+    if e.boss {
+        spawn BossAttack(A, e, fx)
+    } else {
+        spawn EliteAttack(A, e, fx, shots)
+    }
     set A.enemies@+ = e
     defer {
         body_free(A.w, e.b)
@@ -50,9 +79,14 @@ task Seeker (A, e, fx) {
     spawn {
         loop on :draw {
             eng.push(e.x, e.y, e.r, e.hit.s.x)
-            eng.rect(e.x, e.y, 14, 6, 3, 3, if e.hit.f > 0 => fg@0 => e.color)
+            eng.rect(e.x, e.y, e.w, e.h, if e.boss => 4 => 3, if e.boss => 4 => 3,
+                     if e.hit.f > 0 => fg@0 => e.color)
             eng.pop()
-            draw_hp_bar(e, 14, 6, red@0)
+            if e.boss {
+                eng.line(e.x - e.w/2, e.y + 8, e.x + e.w/2, e.y + 8, bg@(-3), 2)
+                eng.line(e.x - e.w/2, e.y + 8, e.x - e.w/2 + e.w*(e.attack_ratio || 0), e.y + 8, e.color, 2)
+            }
+            draw_hp_bar(e, e.w, e.h, red@0)
         }
     }
 
@@ -75,10 +109,21 @@ task Seeker (A, e, fx) {
             until e.hp <= 0
         }
     } with {
-        ;; the position, in every tick
+        ;; the position and the speed, in every tick
         loop on :clock {
             set e.x, e.y = body_pos(e.b)
             set e.r = body_angle(e.b)
+            set e.buff_mvspd_m = e.boost * (if e.elite == "tank" => 0.35 => 1)
+            unit_stats(e, false, A.ng)
+            set st.max_v = e.max_v
+            if (e.boost > 1) && !e.elite && !e.boss {
+                ;; a boosted seeker goes from green to red along its boost
+                val k = 3 + 0.015*e.level
+                val n = e.boost / k
+                val gr, gg, gb = comps(green@0)
+                val rr, rg, rb = comps(red@0)
+                set e.color = rgba(remap(n, 1, 0.5, gr, rr), remap(n, 1, 0.5, gg, rg), remap(n, 1, 0.5, gb, rb))
+            }
         }
     } with {
         loop {
@@ -87,12 +132,45 @@ task Seeker (A, e, fx) {
                 loop on :clock {
                     steer_update(st)
                     val l = A.units@0
-                    if l {
-                        seek_point(st, l.x, l.y)
+                    ifs {
+                        e.aiming > 0 => {
+                            ;; aims at the leader (a shooter, a headbutter charging)
+                            body_set(e.b, :damping, 10)
+                            if l {
+                                rotate_towards_point(e.b, l.x, l.y, 0.5)
+                            }
+                        }
+                        e.headbutting => nil
+                        e.boss => {
+                            ;; toward the middle of the other enemies
+                            var x, y = 0, 0
+                            if #A.enemies > 1 {
+                                loop _, o in A.enemies {
+                                    set x += o.x
+                                    set y += o.y
+                                }
+                                set x = x / #A.enemies
+                                set y = y / #A.enemies
+                            } else {
+                                if l {
+                                    set x = l.x
+                                    set y = l.y
+                                }
+                            }
+                            seek_point(st, x, y)
+                            wander(st, 10, 250, 3)
+                            separate(st, 16, A.enemies)
+                            rotate_towards_velocity(e.b, 0.5)
+                        }
+                        else => {
+                            if l {
+                                seek_point(st, l.x, l.y)
+                            }
+                            wander(st, 50, 100, 20)
+                            separate(st, 16, A.enemies)
+                            rotate_towards_velocity(e.b, 0.5)
+                        }
                     }
-                    wander(st, 50, 100, 20)
-                    separate(st, 16, A.enemies)
-                    rotate_towards_velocity(e.b, 0.5)
                 }
             } with {
                 await :Push until it.to == e
@@ -117,7 +195,18 @@ task Seeker (A, e, fx) {
     }
 
     ;; death, as the end of `Seeker:hit`
-    trace("enemy.die", "seeker")
+    trace("enemy.die", e.boss || e.elite || "seeker")
+    if e.boss {
+        slow(0.25, 1)
+        play(magic_die1, [pitch=rfloat(0.95, 1.05), volume=0.5])
+    }
+    if e.elite == "speed_booster" {
+        spawn @fx BoostAround(A, e, nil, 3, fx)
+    }
+    if e.elite == "exploder" {
+        play(mine1, [pitch=rfloat(0.95, 1.05), volume=0.5])
+        spawn @shots ExploderMine(A, e.x, e.y, e, fx, shots)
+    }
     loop _ in rint(4, 6) {
         spawn @fx HitParticle(e.x, e.y, [color=e.color])
     }
