@@ -628,6 +628,7 @@ task Shop (run) {
         [ w=28, h=18, out="[greenm5]GO!", over="[fgm5]GO!", color=green@0 ] })
     spawn @bs Button(task, :restart, W/2 + 148, 18, "R")
 
+    run_save(run)
     val coins = func () {
         play(rtable([coins1, coins2, coins3]), [pitch=rfloat(0.95, 1.05), volume=0.5])
     }
@@ -645,6 +646,9 @@ task Shop (run) {
     }
     loop {
         val e = await <:Button.click || :Shop.buy || :Shop.sell || :Shop.item_up || :Shop.item_sell || :key.dn>
+        defer {
+            run_save(run)       ;; after each change, as `system.save_run`
+        }
         val id = ifs {
             e ?? :Button.click => e.id
             e ?? :key.dn => match e.name {

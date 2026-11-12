@@ -23,6 +23,7 @@ spawn SlowMotion()
 par {
     ;; the screens: each one runs until it asks for the next one, and the
     ;; transition covers it
+    state_load()
     var run = new_run()
     var screen = [ Menu, nil, "mainmenu" ]
     loop {
@@ -50,11 +51,15 @@ par {
                         }
                     }
                     set run.level += 1
+                } else {
+                    ;; "arena run": the run saved, if any (`system.load_run`)
+                    set run = run_load() || run
                 }
                 [ Shop, run, "buy_screen" ]
             }
             :arena => [ Play, run, "arena" ]
             :restart => do {
+                run_clear()
                 set run = new_run()
                 [ Shop, run, "buy_screen" ]
             }

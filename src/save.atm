@@ -1,0 +1,121 @@
+;; The save of the state and of the run, as `system.save_state` and
+;; `system.save_run` of the original, in files of lines of words in the
+;; directory `SNX_SAVE` (by default `~/.local/share/snxkx`; in the test
+;; mode, only if `SNX_SAVE` is given).
+;;
+;;     state.txt                       run.txt
+;;     ng_max 1                        level 3
+;;     ng 0                            loop 0
+;;     dark_transitions false          gold 10
+;;                                     shop 1 2          (level, xp)
+;;                                     locked true archer - wizard
+;;                                     unit vagrant 1 0 0  (level, reserve)
+;;                                     passive centipede 1 0  (level, xp)
+;;                                     pool amplify ballista ...
+;;
+;; An empty `run.txt` means no run to continue.
+
+val SAVE_DIR = os.getenv("SNX_SAVE") ||
+    (if os.getenv("SNX_FRAMES") => nil => ((os.getenv("HOME") || ".") ++ "/.local/share/snxkx"))
+
+func save_lines (name, lines) {
+    if SAVE_DIR {
+        eng.write_file(SAVE_DIR ++ "/" ++ name, vector.join(lines, "\n") ++ "\n")
+    }
+}
+
+;; The lines of a file, each a vector of words, or nil.
+func load_lines (name) {
+    val s = SAVE_DIR && eng.read_file(SAVE_DIR ++ "/" ++ name)
+    if !s {
+        return nil
+    }
+    val out = []
+    loop _, l in string.split(s, "\n") {
+        val ws = string.split(l)
+        if #ws > 0 {
+            set out@+ = ws
+        }
+    }
+    out
+}
+
+func state_save () {
+    save_lines("state.txt", [
+        "ng_max " ++ tostring(STATE.ng_max),
+        "ng " ++ tostring(STATE.ng),
+        "dark_transitions " ++ tostring(STATE.dark_transitions),
+    ])
+}
+
+func state_load () {
+    loop _, w in load_lines("state.txt") || [] {
+        match w@0 {
+            "ng_max" => set STATE.ng_max = tonumber(w@1)
+            "ng" => set STATE.ng = tonumber(w@1)
+            "dark_transitions" => set STATE.dark_transitions = w@1 == "true"
+        }
+    }
+}
+
+func run_save (run) {
+    val ls = [
+        "level " ++ tostring(run.level),
+        "loop " ++ tostring(run.loop),
+        "gold " ++ tostring(run.gold),
+        "shop " ++ tostring(run.shop_level) ++ " " ++ tostring(run.shop_xp),
+    ]
+    if run.locked && run.cards {
+        val cs = []
+        loop i in 3 {
+            set cs@+ = run.cards@(i) || "-"
+        }
+        set ls@+ = "locked true " ++ vector.join(cs, " ")
+    }
+    loop _, u in run.units {
+        set ls@+ = "unit " ++ unit_character(u) ++ " " ++ tostring(unit_level(u)) ++ " " ++
+                   tostring(u.reserve && u.reserve@0 || 0) ++ " " ++ tostring(u.reserve && u.reserve@1 || 0)
+    }
+    loop _, p in run.passives {
+        set ls@+ = "passive " ++ p.passive ++ " " ++ tostring(p.level) ++ " " ++ tostring(p.xp)
+    }
+    set ls@+ = "pool " ++ vector.join(run.pool, " ")
+    save_lines("run.txt", ls)
+}
+
+func run_clear () {
+    save_lines("run.txt", [])
+}
+
+;; The run saved, or nil.
+func run_load () {
+    val ls = load_lines("run.txt")
+    if !ls || (#ls == 0) {
+        return nil
+    }
+    val run = [ level=1, loop=0, gold=3, units=[], passives=[], pool=[], shop_level=1, shop_xp=0 ]
+    loop _, w in ls {
+        match w@0 {
+            "level" => set run.level = tonumber(w@1)
+            "loop" => set run.loop = tonumber(w@1)
+            "gold" => set run.gold = tonumber(w@1)
+            "shop" => {
+                set run.shop_level = tonumber(w@1)
+                set run.shop_xp = tonumber(w@2)
+            }
+            "locked" => {
+                set run.locked = true
+                set run.cards = []
+                loop i in 3 {
+                    set run.cards@+ = if w@(2 + i) == "-" => false => w@(2 + i)
+                }
+            }
+            "unit" => set run.units@+ = [ character=w@1, level=tonumber(w@2), reserve=[tonumber(w@3), tonumber(w@4)] ]
+            "passive" => set run.passives@+ = [ passive=w@1, level=tonumber(w@2), xp=tonumber(w@3) ]
+            "pool" => loop i in (#w - 1) {
+                set run.pool@+ = w@(i + 1)
+            }
+        }
+    }
+    run
+}

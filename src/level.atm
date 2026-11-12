@@ -343,6 +343,8 @@ task Won (A, ui) {
         set STATE.ng_max += 1
     }
     set STATE.ng += 1
+    run_clear()
+    state_save()
     spawn @ui Modal()
     spawn @ui TweenReal(4, CAM, [x=W/2, y=H/2, r=0], linear)
     val t = text([ [text="[wavy_mid, cbyc2]congratulations!", font=fat_font, alignment=:center] ])
@@ -362,6 +364,7 @@ task Won (A, ui) {
             set STATE.ng_max = 5
         }
         set STATE.ng = 5
+        state_save()
         spawn @ui Text2(W/2 + 40, H/2 + 20, text([
             [text="[fg]now you've really beaten the game!", font=pixul_font, alignment=:center, height_multiplier=1.24],
             [text="[fg]thanks a lot for playing it and completing it entirely!", font=pixul_font, alignment=:center, height_multiplier=1.24],
@@ -386,6 +389,7 @@ task Won (A, ui) {
     }
     ;; loop: the same run, one loop further, at the new game plus before
     set STATE.ng = if STATE.ng >= 5 => 5 => math.max(STATE.ng - 1, 0)
+    state_save()
     set A.run.loop += 1
 }
 
@@ -403,6 +407,7 @@ task ClearGo (A) {
 ;; the level reached, and a button to restart the run.
 task Died (A, ui) {
     trace("died", tostring(A.level))
+    run_clear()                 ;; as `system.save_run()` in `Arena:die`
     spawn @ui Modal()
     val t = text([ [text="[wavy_mid]you died...", font=fat_font, alignment=:center, height_multiplier=1.25] ])
     spawn @ui Text2(W/2, H/2 - 32, t)

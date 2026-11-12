@@ -1111,6 +1111,47 @@ static AStatus eg_mouse (const char* tag, double x, double y, int but) {
     return eg_emit(tag, NULL, x, y, but);
 }
 
+// Files: the contents of a file as a string (or nil), and a string
+// written to a file, after its directories (as `love.filesystem`).
+#include <sys/stat.h>
+#include <errno.h>
+
+static AVal eg_read_file (const char* path) {
+    FILE* f = fopen(path, "rb");
+    if (f == NULL) {
+        return a_nil();
+    }
+    fseek(f, 0, SEEK_END);
+    long n = ftell(f);
+    fseek(f, 0, SEEK_SET);
+    char* buf = malloc(n + 1);
+    size_t got = fread(buf, 1, n, f);
+    buf[got] = '\0';
+    fclose(f);
+    AVal v = a_strz(buf);
+    free(buf);
+    return v;
+}
+
+static int eg_write_file (const char* path, const char* s) {
+    char dir[1024];
+    snprintf(dir, sizeof(dir), "%s", path);
+    for (char* p = dir + 1; *p; p++) {
+        if (*p == '/') {
+            *p = '\0';
+            mkdir(dir, 0755);
+            *p = '/';
+        }
+    }
+    FILE* f = fopen(path, "wb");
+    if (f == NULL) {
+        return 0;
+    }
+    fputs(s, f);
+    fclose(f);
+    return 1;
+}
+
 // The test script, as `tools/bench/bench.lua` of the original:
 //
 //   SNX_INPUT = f:mv:x:y,f:dn:k,f:up:k,...   (game pixels; k is a key

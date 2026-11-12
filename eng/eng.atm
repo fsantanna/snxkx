@@ -118,6 +118,14 @@ val eng = [
     testing = func () {
         `:boolean EG_TEST`
     },
+
+    ;; files: the contents of a file (or nil), and a string written to one
+    read_file = func (p) {
+        `:value eg_read_file(eg_cstr($p))`
+    },
+    write_file = func (p, s) {
+        `:boolean eg_write_file(eg_cstr($p), eg_cstr($s))`
+    },
 ]
 
 ;;; COLORS ;;;

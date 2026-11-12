@@ -1,0 +1,6 @@
+4	0	17	2	1	true	scout	false	wizard
+vagrant	2	1	0
+archer	1	0	0
+centipede	2	1	2	ballista
+state	2	1	false
+cleared	nil

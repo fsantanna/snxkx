@@ -1,0 +1,2 @@
+SNX_FRAMES=1
+SNX_SAVE=$OUT/save
