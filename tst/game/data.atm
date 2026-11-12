@@ -1,0 +1,8 @@
+;; The data of the original, dumped from the running game (src/data.atm).
+include "../../src/data.atm"
+print(#character_classes.vagrant, character_classes.vagrant@0, character_classes.vagrant@1)
+print(string.format("%08X", character_colors.archer))
+print(class_stat_multipliers.ranger.aspd, class_stat_multipliers.warrior.hp)
+print(#tier_to_characters@1, tier_to_characters@4@0)
+print(level_to_boss@6, level_to_boss@25, level_to_tier_weights@1@0)
+print(character_descriptions.vagrant@1)
