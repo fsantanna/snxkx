@@ -27,7 +27,7 @@ func cubic_in_out (t) {
 val LN210 = 10 * 0.6931471805599453
 
 func expo_out (t) {
-    if t == 1 => 1 => 1 - cmath.exp(-LN210*t)
+    if t == 1 => 1 => 1 - math.exp(-LN210*t)
 }
 
 ;;; SPRINGS ;;;

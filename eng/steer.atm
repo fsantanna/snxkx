@@ -138,11 +138,11 @@ func lerp_angle (v, src, dst) {
 ;; As `rotate_towards_velocity(lerp)`.
 func rotate_towards_velocity (b, lerp) {
     val vx, vy = body_vel(b)
-    body_set(b, :angle, lerp_angle(lerp, body_angle(b), cmath.atan2(vy, vx)))
+    body_set(b, :angle, lerp_angle(lerp, body_angle(b), math.atan2(vy, vx)))
 }
 
 ;; As `rotate_towards_object(o, lerp)`.
 func rotate_towards_point (b, x, y, lerp) {
     val px, py = body_pos(b)
-    body_set(b, :angle, lerp_angle(lerp, body_angle(b), cmath.atan2(y - py, x - px)))
+    body_set(b, :angle, lerp_angle(lerp, body_angle(b), math.atan2(y - py, x - px)))
 }
