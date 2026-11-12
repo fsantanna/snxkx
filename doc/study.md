@@ -1052,3 +1052,87 @@ card pulses (two tweens in a loop, where the original cancels three
 tagged tweens on exit); `just_created` of a square is a task that
 clears a local after 0.1 s. One flag remains as a local of the card,
 `selected`, read by its drawing, which runs beside the phases.
+
+## 12. Timers with a tag: restart, token, count
+
+The original names many timers with a tag, so that a new one replaces
+the running one: a curse (`'jester_curse'`), a slow (`'slow'`), a speed
+boost, the chain infusion of the stormweaver, the haste. The effect is a
+field, set when the timer starts and cleared when it fires.
+
+### Lua + LÖVE
+
+```lua
+-- enemies.lua:738-742, the curse of the jester
+elseif curse == 'jester' then
+  self.jester_cursed = true
+  self.jester_lvl3 = arg1
+  self.jester_ref = arg2
+  self.t:after(duration, function() self.jester_cursed = false end, 'jester_curse')
+
+-- enemies.lua:724-727, a slow
+function Seeker:slow(amount, duration)
+  self.slowed = amount
+  self.t:after(duration, function() self.slowed = false end, 'slow')
+end
+```
+
+### Atmos
+
+```
+;; src/seeker.atm: a curse holds a token for its time; a new one of the
+;; kind replaces the token, and the old one then ends without clearing it
+task Cursed (e, k, v, d) {
+    val token = [ v=v ]
+    set e@(k) = token
+    await(d * 1s)
+    if e@(k) == token {
+        set e@(k) = nil
+    }
+}
+
+;; src/seeker.atm: a slow restarts on a new one
+task SeekerSlows (e) {
+    loop {
+        var s = await :Slowed until it.to == e
+        loop {
+            set e.slowed = s.amount
+            set s = par :any {
+                await(s.duration * 1s)
+                nil
+            } with {
+                await :Slowed until it.to == e
+            }
+            until !s
+        }
+        set e.slowed = nil
+    }
+}
+```
+
+### Analysis
+
+The port replaces a tagged timer in three ways, by what reads it.
+
+When one task owns the effect, the restart is a `par :any` between the
+time and the next request: the new request aborts the wait, and the
+loop starts again with it (the slows, the speed boosts). Nothing marks
+the timer, since the running wait is the timer.
+
+When the effect comes from many tasks, each a task of a pool (a curse
+of each kind, the chain infusion, the haste), the port cannot abort the
+task of a kind by its name: the tasks of a pool cannot be kept in a
+table to find them (`doc/compiler.md`, 2). Each one holds a token
+instead, and only the holder of the current token clears the field. The
+token is the tag of the original, made a value.
+
+When the effects add up instead of replacing each other (a flash, the
+bar of hp), a count of the running tasks is enough (section 8).
+
+The field remains in the first two cases, since others read it: the
+death of a cursed enemy reads its curses, the movement reads the slow.
+The flags that only guarded a phase of their own task are gone, as in
+the earlier sections: a construct that cannot be picked up for 0.5s
+awaits 0.5s before it awaits a unit (`cant_be_picked_up`), and the
+choice of a passive is a step of the end of the level
+(`choosing_passives`).

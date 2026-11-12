@@ -39,13 +39,53 @@ a time, in the parts that the port covers, with what became of each one.
 | `selected` of the buttons of the shop (reroll, lock, level, GO) | `buy_screen.lua:706, 717, 733, 741, 769, 789, 797, 822-872, 996-1040` | the look, and whether a click counts | gone: the phases of `ShopButton` |
 | `GoButton.transitioning` | `buy_screen.lua:690, 709` | GO starts the level once | gone: after GO, the shop awaits forever, until the transition aborts it |
 | `locked_state` (a global) | `buy_screen.lua:61, 136, 173, 703, 763-765, 1625` | the cards kept for the next shop, rewritten by four writers | the fields `run.locked` and `run.cards`, written by the shop only |
+| `Seeker.jester_cursed`, `bane_cursed`, `infested`, `silenced` (tagged timers) | `enemies.lua:730-760` | the curses, read when the enemy dies or attacks | kept as fields holding a token (`Cursed`): a new curse replaces the token |
+| `Seeker.barbarian_stunned` | `player.lua:2486-2489`, `enemies.lua:477` | twice the damage and no attacks | kept as a field (`stunned`) set by a task for its time |
+| `Seeker.slowed` (a tagged timer) | `enemies.lua:724-727` | the speed | kept, set by one task that restarts on a new slow (`SeekerSlows`) |
+| `Seeker.taunted` (a tagged timer) | `player.lua:2842`, `enemies.lua:306` | the target of the chase | kept as a token field |
+| `Seeker.juggernaut_push`, `launcher_push` | `enemies.lua:299, 375-382` | the damage on a wall while thrown | kept, cleared at the end of the push phase |
+| `Seeker.pyrod` | `enemies.lua:441-442, 593-599` | an area on death after the hit of a pyromancer | gone: the hit carries it (`[pyrod=a]`), and the death reads the last hit |
+| `Seeker.doom`, `usurer_count` | `enemies.lua:758, 771` | counts toward a big hit | kept as counters |
+| `Player.chain_infused` (a tagged timer) | `player.lua:1727-1730` | the sparks of a hit | kept as a token field |
+| `Player.divined`, `Player.undead` | `player.lua:813-818, 1600-1611` | a second life, ten more seconds | kept as fields (the hit and the drawing read them) |
+| `Player.fairyd` | `player.lua:693-727, 1454` | the halo of the fairy | gone: the halo reads the speed it gives |
+| `Player.hasted` (a timestamp, with a tagged timer) | `player.lua:3853, 1329-1332` | the speed of haste, by the time since the orb | kept as a token holding the time |
+| `sorcerer_count`, `dg_counter`, `barrager_counter` | `player.lua:58-73, 376, 644` | the repeats of the sorcerers, the gun kata, the volley | kept as counters (the barrager's as a local) |
+| `Player.stored_heal` | `player.lua:1568-1570` | the healing of the psykeeper | kept as a field |
+| `Critter.invulnerable` | `player.lua:3887-3888, 3933` | no hit in the first 0.5s | a local cleared by a task |
+| `HealingOrb.cant_be_picked_up`, `Gold.cant_be_picked_up` | `player.lua:3670-3671, 3777-3778` | no pickup in the first 0.5s | gone: `await 500ms` before awaiting a unit |
+| `Arena.choosing_passives` | `arena.lua:719, 294, 361, 1127` | the arena waits for the choice | gone: the choice is a step of `Clear` |
+| `PassiveCard.selected`, `ItemCard.selected` | `buy_screen.lua:1392, 1443, 1542` | the look, and whether a click counts | the phases of the card (a local for the drawing of the item) |
 
-Count so far: 36 variables in the original (counting the nine flags of
+Count so far: 63 variables in the original (counting the nine flags of
 the steering as one, and the `selected` of the four buttons of the shop
-as one), 2 counters and 2 fields for the HUD in the port,
-2 locals (`selected` of a card, `created` of a square), 2 fields of the
-run (`locked`, `cards`), and 3 fields that one task shows to another
-(`aiming`, a count shared by two attacks; `headbutting`; `boost`).
+as one). In the port, 31 of them are gone. The other 32 became 32
+variables, none of which guards a phase of the task that sets it:
+
+- 17 fields that other tasks read (from 18 of the original): the curses
+  (4), the stun, the slow, the taunt, the throws (2), the chain
+  infusion, the second life, undead, the haste, the stored healing, and
+  the three of the elites (`aiming`, a count shared by two attacks, for
+  `headbutt_charging` and `shooting`; `headbutting`; `boost`);
+- 6 counts: of the tasks of a flash and of a bar of hp (2), of the
+  curses toward a big hit (2), of the repeats of a sorcerer and of the
+  gun kata (2);
+- 5 locals of a task: `selected` of a card and of an item, `created` of
+  a square, `invulnerable` of a critter, the count of the barrager;
+- 4 fields of the run or of the HUD (from 3): `locked` and `cards`,
+  `start_time`, `wave`.
+
+- 17 are fields that other tasks read: the curses (4), the stun, the
+  slow, the taunt, the throws (2), the chain infusion, the second life,
+  undead, the haste, the stored healing, and the three of the elites
+  (`aiming`, a count shared by two attacks; `headbutting`; `boost`);
+- 6 are counts: of the tasks of a flash and of a bar of hp (2), of the
+  curses toward a big hit (2), of the repeats of a sorcerer and of the
+  gun kata (2);
+- 3 are locals of a task: `selected` of a card, `created` of a square,
+  `invulnerable` of a critter (and the count of the barrager);
+- 4 are fields of the run or of the HUD: `locked`, `cards`, `start_time`,
+  `wave`.
 
 The two counters are state, but not a flag guarding a phase: each
 counts tasks that are running, and a task restarts the effect by simply
