@@ -20,12 +20,15 @@ func seeker_push (e, f, r) {
 
 ;; A seeker. `e` has `x`, `y`, and `level`.
 task Seeker (A, e, fx) {
+    trace("add", string.format("Seeker %.1f %.1f", e.x, e.y))
     set e.kind    = :enemy
     set e.stats   = :seeker
     set e.classes = [:seeker]
     set e.color   = red@0
     set e.hit     = hfx(1)
     set e.hp_shown = 0
+    set e.w = 14
+    set e.h = 6
     set e.r = 0
     unit_stats(e, true, A.ng)
     body(A.w, e, :dynamic, e.x, e.y, :enemy, [:rect, 14, 6])

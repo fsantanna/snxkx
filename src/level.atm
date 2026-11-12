@@ -1,0 +1,293 @@
+;; A level of the arena, as `Arena:on_enter`, `Arena:quit`, `Arena:die`,
+;; and `Arena:gain_gold` (`arena.lua`), for the levels that are not of a
+;; boss (those come with the bosses).
+;;
+;; In the original, a level is timers nested in callbacks: a countdown
+;; inside an `after`, the waves inside an `every` with a condition, each
+;; wave inside an `after`, its enemies inside another `after`, and flags
+;; (`spawning_enemies`, `quitting`, `died`, ...) that tell the timers what
+;; is going on. Here a level is a sequence: the countdown, then the waves,
+;; then the end.
+
+;; The number of waves and the chance of distributed enemies, by level.
+val LEVEL_MAX_WAVES = [
+    2, 3, 4,
+    3, 4, 4, 5,
+    5, 5, 5, 5, 7,
+    6, 6, 7, 7, 8, 10,
+    8, 8, 10, 12, 14, 16, 25,
+]
+val LEVEL_DISTRIBUTED = [
+    0, 5, 10,
+    10, 15, 15, 20,
+    20, 20, 20, 20, 25,
+    25, 25, 25, 25, 25, 30,
+    20, 25, 30, 35, 40, 45, 50,
+]
+
+;; The index of a level in the tables of 25 levels, which repeat.
+func level_index (level) {
+    val n = level % 25
+    if n == 0 => 24 => (n - 1)
+}
+
+;; Until the arena has no enemies and spawns none: the condition of the
+;; waves of the original (`#enemies <= 0 and not self.spawning_enemies`).
+task Quiet (foes, spawns) {
+    loop {
+        if #spawns > 0 {
+            await :all spawns
+        }
+        if #foes > 0 {
+            await :all foes
+        }
+        until (#spawns == 0) && (#foes == 0)
+    }
+}
+
+;; A wave of enemies at one of three places: a marker, and the enemies
+;; 1.125s later. It lasts as the flag of the original, which counts 0.1s
+;; per enemy, and more.
+task WaveGroup (A, n, foes, fx) {
+    val ps = [
+        [x=A.x1 + 32, y=H/2], [x=W/2, y=H/2], [x=A.x2 - 32, y=H/2],
+    ]
+    val p = rtable(ps)
+    par :all {
+        await((n*0.1 + 0.5 + 0.75) * 1s)
+    } with {
+        await MarkAndSpawn(A, p, n, false, foes, fx)
+    }
+}
+
+;; A wave of distributed enemies: `n` patterns, one every 2s.
+task WaveDistributed (A, n, foes, fx) {
+    pin ds = tasks()
+    loop i in n {
+        if i > 0 {
+            await 2s
+        }
+        spawn @ds SpawnDistributed(A, foes, fx)
+    }
+    await :all ds
+}
+
+;; The countdown and the waves of a level, until the last wave is gone.
+task Waves (A, foes, spawns, fx) {
+    set A.max_waves = LEVEL_MAX_WAVES@(level_index(A.level))
+    set A.wave = 0
+    set A.start_time = 3
+    await 1s
+    loop _ in 3 {
+        await 1s
+        if A.start_time > 1 {
+            play(alert1, [volume=0.5])
+        }
+        set A.start_time -= 1
+        spawn HfxUse(A.cond1, 0.25, 200, 10)
+    }
+    play(alert1, [pitch=1.2, volume=0.5])
+    shake(4, 0.25)
+    spawn @fx SpawnCircle(W/2, H/2 - 48, red@0, fx)
+    loop {
+        await Quiet(foes, spawns)
+        set A.wave += 1
+        until A.wave > A.max_waves
+        trace("wave", tostring(A.wave))
+        spawn HfxUse(A.cond1, 0.25, 200, 10)
+        spring_pull(A.cond2.s, 0.0625)
+        await 500ms
+        if rbool(LEVEL_DISTRIBUTED@(level_index(A.level))) {
+            val n = math.ceil((8 + (A.wave + math.min(A.loop*6, 60) - 1)*2)/7)
+            spawn @spawns WaveDistributed(A, n, foes, fx)
+        } else {
+            val n = 8 + (A.wave + math.min(A.loop*12, 200) - 1)*2
+            spawn @spawns WaveGroup(A, n, foes, fx)
+        }
+    }
+}
+
+;; Every 8s, the enemies that could not spawn over a body come back, in
+;; groups of a quarter at four places (`enemy_spawns_prevented`).
+task Respawns (A, foes, spawns, fx) {
+    loop {
+        await 8s
+        val q = math.floor(A.spawns_prevented/4)
+        if (#spawns == 0) && (q > 0) {
+            spawn @spawns RespawnGroup(A, q, foes, fx)
+            set A.spawns_prevented = 0
+        }
+    }
+}
+
+;; The groups of `Respawns`, which last as the flag of the original.
+task RespawnGroup (A, q, foes, fx) {
+    par :all {
+        await((1.125 + q*0.25) * 1s)
+    } with {
+        await MarkAndSpawnK(A, spawn_points(A), 4, q, true, foes, fx)
+    }
+}
+
+;;; HUD ;;;
+
+;; The countdown and the waves, over the arena, as `Arena:draw`.
+task Hud (A) {
+    loop on :draw {
+        ifs {
+          (A.start_time || 0) > 0 => {
+            eng.push(W/2, H/2 - 48, 0, A.cond1.s.x)
+            print_centered(fat_font, tostring(A.start_time), W/2, H/2 - 48, 0, 1, 1,
+                           if A.cond1.f > 0 => fg@0 => red@0)
+            eng.pop()
+          }
+          A.max_waves => {
+            eng.push(A.x2 - 50, A.y1 - 10, 0, A.cond2.s.x)
+            print_centered(fat_font, "wave:", A.x2 - 50, A.y1 - 10, 0, 0.6, 0.6, fg@0)
+            eng.pop()
+            val s = tostring(math.min(A.wave, A.max_waves)) ++ "/" ++ tostring(A.max_waves)
+            eng.push(A.x2 - 25 + text_width(fat_font, s)/2, A.y1 - 8, 0, A.cond1.s.x)
+            print_at(fat_font, s, A.x2 - 25, A.y1 - 8, 0, 0.75, 0.75, 0, fat_font.h/2,
+                     if A.cond1.f > 0 => fg@0 => yellow@0)
+            eng.pop()
+          }
+        }
+    }
+}
+
+;; The bar of a unit under the arena, as `CharacterHP`: its hp, and the
+;; cooldown of its attack.
+task CharacterHP (A, u, x, y) {
+    spawn Springs(u.chp.s)
+    loop on :draw {
+        val dead = u.hp <= 0
+        val c = ifs {
+            dead         => bg@5
+            u.chp.f > 0  => fg@0
+            else         => RAMPS@(character_color_strings@(u.character))@(-2)
+        }
+        eng.push(x, y, 0, u.chp.s.x)
+        eng.rect(x, y - 2, 14, 4, 2, 2, c, 2)
+        if u.hp > 0 {
+            eng.rect2(x - 7, y - 4, 14*(u.hp/u.max_hp), 4, nil, nil, c)
+        }
+        if !dead {
+            eng.line(x - 8, y + 5, x - 8 + 15.5*(u.cooldown || 0), y + 5, c, 2)
+        }
+        eng.pop()
+    }
+}
+
+;;; TEXTS ;;;
+
+;; A text at a place, with a spring, as `Text2`.
+task Text2 (x, y, t, sx, sy) {
+    val s = spring(1)
+    set pub = [ t=t, spring=s ]
+    spawn UISprings(s)
+    loop on :draw {
+        text_draw(t, x, y, 0, s.x*(sx || 1), s.x*(sy || sx || 1))
+    }
+}
+
+;; The screen dimmed under the interface, as the original draws it when
+;; the run is won, lost, or paused.
+task Modal () {
+    loop on :draw {
+        eng.rect(W/2, H/2, 2*W, 2*H, nil, nil, modal_transparent)
+    }
+}
+
+;;; GOLD ;;;
+
+;; As `Arena:gain_gold`: the gold of the level, the gold picked up, and
+;; the interest (a fifth of the gold, up to 5).
+func gain_gold (A) {
+    val r = level_to_gold_gained@(A.level)
+    set A.gold_gained = rint(r@0, r@1)
+    set A.interest = math.min(math.floor(A.run.gold/5), 5)
+    set A.run.gold = A.run.gold + A.gold_gained + A.gold_picked_up + A.interest
+}
+
+;; The lines of the text of the transition after a level, and the task
+;; that counts them up, as `Arena:transition`.
+func gold_lines (A, step) {
+    val g = "gold gained: " ++ tostring(if step >= 0 => A.gold_gained => 0) ++ " + " ++ tostring(if step >= 0 => A.gold_picked_up => 0)
+    val i = "interest: " ++ tostring(if step >= 1 => A.interest => 0)
+    val t = "total: " ++ tostring(if step >= 2 => (A.gold_gained + A.interest + A.gold_picked_up) => 0)
+    val tag = \(k) { if k == step => "[nudge_down, bg]" => "[wavy_lower, bg]" }
+    [
+        [text=tag(0) ++ g, font=pixul_font, alignment=:center, height_multiplier=1.5],
+        [text=tag(1) ++ i, font=pixul_font, alignment=:center, height_multiplier=1.5],
+        [text=tag(2) ++ t, font=pixul_font, alignment=:center],
+    ]
+}
+
+;;; THE END ;;;
+
+;; The tween of the slow motion to 0, in real time, as the original
+;; tweens `main_slow_amount` (here the slow motion is global).
+task SlowDown (dur) {
+    val st = [ v=1 ]
+    spawn {
+        loop on :tick {
+            eng.slow(st.v)
+        }
+    }
+    await TweenReal(dur, st, [v=0], linear)
+    eng.slow(0)
+    await(false)
+}
+
+;; The end of a level that is clear, as `Arena:quit`: the text, the gold,
+;; the slow motion, and the transition to the shop.
+task Clear (A, ui) {
+    trace("clear", tostring(A.level))
+    val t = text([ [text="[wavy_mid]arena clear!", font=fat_font, alignment=:center] ])
+    spawn @ui Text2(W/2, H/2 - 48, t)
+    spawn @ui Cbyc(t, :cbyc)
+    gain_gold(A)
+    spawn {
+        await WaitReal(2)
+        await SlowDown(0.7)
+    }
+    await WaitReal(3)
+    val l = A.units@0
+    play(ui_transition2, [pitch=rfloat(0.95, 1.05), volume=0.5])
+    emit @:global :goto [ screen=:buy_screen, x=l && l.x || (W/2), y=l && l.y || (H/2),
+                          color=fg@0, lines=gold_lines(A, -1), counting=A ]
+    await(false)
+}
+
+;; The end of a level when the snake dies, as `Arena:die`: the text, the
+;; slow motion, the camera back to the center, and after 2s the build,
+;; the level reached, and a button to restart the run.
+task Died (A, ui) {
+    trace("died", tostring(A.level))
+    spawn @ui Modal()
+    val t = text([ [text="[wavy_mid]you died...", font=fat_font, alignment=:center, height_multiplier=1.25] ])
+    spawn @ui Text2(W/2, H/2 - 32, t)
+    spawn @ui Cbyc(t, :cbyc)
+    spawn SlowDown(2)
+    spawn @ui TweenReal(2, CAM, [x=W/2, y=H/2, r=0], linear)
+    await WaitReal(2)
+    spawn @ui Text2(40, 20, text([ [text="[wavy_mid, fg]your build", font=pixul_font, alignment=:center] ]))
+    loop i, u in A.run.units {
+        val name = u@0
+        spawn @ui Text2(20 + 14 + text_width(pixul_font, name)/2, 40 + i*19,
+                        text([ [text="[" ++ character_color_strings@(name) ++ "]" ++ name, font=pixul_font, alignment=:left] ]))
+    }
+    spawn @ui Text2(W/2, H/2,
+        text([ [text="[wavy_mid, fg]level reached: [wavy_mid, yellow]" ++ tostring(A.level), font=fat_font, alignment=:center] ]), 0.7, 0.7)
+    spawn @ui Button(task, :restart, W/2, H/2 + 24, "restart run (r)")
+    par :any {
+        await :Button.click until it.id == :restart
+    } with {
+        await :key.dn until it.name == "R"
+    }
+    play(ui_transition2, [pitch=rfloat(0.95, 1.05), volume=0.5])
+    play(ui_switch2, [pitch=rfloat(0.95, 1.05), volume=0.5])
+    play(ui_switch1, [pitch=rfloat(0.95, 1.05), volume=0.5])
+    emit @:global :goto [ screen=:restart, x=W/2, y=H/2, color=fg@0, text="[wavy, bg]restarting..." ]
+    await(false)
+}

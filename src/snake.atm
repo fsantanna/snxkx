@@ -121,6 +121,8 @@ task Unit (A, u, fx) {
     set u.hit     = hfx(1)
     set u.shoot   = hfx(1)
     set u.hp_shown = 0
+    set u.w = 9
+    set u.h = 9
     set u.x = u.x || 0
     set u.y = u.y || 0
     set u.r = u.r || 0
@@ -164,6 +166,9 @@ task Unit (A, u, fx) {
         loop e on :Hit until it.to == u {
             spawn HfxUse(u.hit, 0.25, 200, 10)
             spawn ShowHp(u)
+            if u.chp {
+                spawn HfxUse(u.chp, 0.5)
+            }
             val dmg = math.max(unit_damage(u, e.dmg), 0)
             set u.hp -= dmg
             play(rtable([player_hit1, player_hit2]), [pitch=rfloat(0.95, 1.05), volume=0.5])

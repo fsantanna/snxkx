@@ -72,15 +72,37 @@ func arena_walls (A) {
     ]
 }
 
-;; An arena with a snake of `units` ([character, level] each), and the
-;; enemies of `enemies` ([x, y, level] each), for the tests until the
-;; waves come. It returns :died when the snake dies.
-task Arena (A, units, enemies) {
+;; The texts of the first level, on the floor: the keys, which shrink
+;; away after 8s.
+task FloorText (x, y, lines, sx) {
+    val t = text(lines)
+    val st = [ sy=sx ]
+    spawn {
+        loop on :draw {
+            text_draw(t, x, y, 0, sx, st.sy)
+        }
+    }
+    await 8s
+    await Tween(0.2, st, [sy=0], linear)
+    await(false)
+}
+
+;; An arena: a level of the run `A.run`, with the snake of its units, its
+;; waves, and its end. With `enemies` ([x, y, level] each), the arena
+;; has those instead of waves (for the tests). It ends when the next
+;; screen covers it.
+task Arena (A, enemies) {
     val w = arena_world()
     set A.w = w
     defer {
         phys_world_free()
     }
+    set A.cond1 = hfx(1)
+    set A.cond2 = hfx(1)
+    set A.spawns_prevented = 0
+    set A.gold_picked_up = 0
+    set A.loop = A.run && A.run.loop || 0
+    spawn Springs(A.cond1.s, A.cond2.s)
 
     ;; the layers, through the camera
     spawn {
@@ -90,8 +112,9 @@ task Arena (A, units, enemies) {
     }
     pin floor   = tasks()
     pin main    = tasks()
-    pin covers  = tasks()
+    pin foes    = tasks()
     pin effects = tasks()
+    spawn Hud(A)
     spawn {
         loop on :draw {
             eng.pop()
@@ -99,14 +122,15 @@ task Arena (A, units, enemies) {
         }
     }
     pin ui = tasks()
+    pin spawns = tasks()
 
     loop _, r in arena_walls(A) {
         spawn @main Wall(A, r@0, r@1, r@2, r@3)
     }
     spawn Stars()
 
-    loop i, c in units {
-        val u = [ character=c@0, level=c@1, index=i ]
+    loop i, c in A.run.units {
+        val u = [ character=c@0, level=c@1, index=i, chp=hfx(1) ]
         if i == 0 {
             set u.x = A.start && A.start.x || (W/2)
             set u.y = A.start && A.start.y || (H/2 + 16)
@@ -114,18 +138,47 @@ task Arena (A, units, enemies) {
         }
         set A.units@+ = u
         spawn @main Unit(A, u, effects)
-    }
-    loop _, e in enemies || [] {
-        spawn @main Seeker(A, [x=e@0, y=e@1, level=e@2], effects)
+        if !A.menu {
+            spawn @effects CharacterHP(A, u, A.x1 + 8 + i*22, A.y2 + 14)
+        }
     }
 
-    par :any {
-        await :Arena.died
-        :died
-    } with {
-        ;; the world steps after all entities have moved
+    if (A.level == 1) && !A.menu {
+        spawn @floor FloorText(W/2, H/2 + 2, [ [text="[light_bg]<- or a         -> or d", font=fat_font, alignment=:center] ], 0.6)
+        spawn @floor FloorText(W/2, H/2 + 18, [ [text="[light_bg]turn left                                      turn right", font=pixul_font, alignment=:center] ], 1)
+        spawn @floor FloorText(W/2, H/2 + 46, [ [text="[light_bg]esc - options", font=fat_font, alignment=:center] ], 0.6)
+    }
+
+    ;; the world steps after all entities have moved
+    spawn {
         loop us on :clock {
             phys_step(w, us / 1000000)
         }
+    }
+
+    val r = par :any {
+        await :Arena.died
+        :died
+    } with {
+        ifs {
+            A.menu => await(false)
+            enemies => {
+                loop _, e in enemies {
+                    spawn @foes Seeker(A, [x=e@0, y=e@1, level=e@2], effects)
+                }
+                await Quiet(foes, spawns)
+            }
+            else => par :any {
+                await Waves(A, foes, spawns, effects)
+            } with {
+                await Respawns(A, foes, spawns, effects)
+            }
+        }
+        :clear
+    }
+    if r == :died {
+        await Died(A, ui)
+    } else {
+        await Clear(A, ui)
     }
 }

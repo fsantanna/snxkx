@@ -27,8 +27,9 @@ task Menu () {
         y = H/2 + 16 + rfloat(-48, 48),
         r = rtable([-math.pi/4, math.pi/4, 3*math.pi/4, -3*math.pi/4]),
     ]
-    spawn Arena(A, [["psykino", 1], ["magician", 1], ["bane", 1], ["scout", 1],
-                    ["cannoneer", 1], ["swordsman", 1], ["archer", 1]])
+    set A.run = [ units=[["psykino", 1], ["magician", 1], ["bane", 1], ["scout", 1],
+                         ["cannoneer", 1], ["swordsman", 1], ["archer", 1]] ]
+    spawn Arena(A)
 
     ;; everything dimmed under the interface
     spawn {
