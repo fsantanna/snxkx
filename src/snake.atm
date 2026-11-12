@@ -1,0 +1,305 @@
+;; The snake: a leader and its followers, each one a unit, as `Player` of
+;; the original (`player.lua`), without its attacks.
+;;
+;; A unit is a task with a record. The records of the snake are in
+;; `A.units`, in order: the first is the leader. The leader turns with
+;; the keys, keeps its last positions, and bounces on the walls; each
+;; follower takes the position of the leader 10.4 pixels per place
+;; behind it along that path.
+;;
+;; The hits between units and enemies are events, as the methods of the
+;; original: `:Hit [to, dmg]` and `:Push [to, f, r]`, emitted to the
+;; whole arena, for the task of the record `to`.
+
+;; As `math.remap`.
+func remap (v, a, b, c, d) {
+    c + (v - a)*(d - c)/(b - a)
+}
+
+;; As `math.lerp_angle_dt(f, dt, src, dst)`.
+func lerp_angle_dt (f, dt, src, dst) {
+    lerp_angle(1 - math.pow(f, dt), src, dst)
+}
+
+;; Emits a hit, a push, or a slow motion to the whole program.
+func hit (to, dmg, o) {
+    emit @:global :Hit ([ to=to, dmg=dmg ] ++ (o || []))
+}
+func push (to, f, r) {
+    emit @:global :Push [ to=to, f=f, r=r ]
+}
+func slow (amount, duration) {
+    emit @:global :Slow [ amount=amount || 0.5, duration=duration || 0.5 ]
+}
+
+;; The slow motion of the original (`slow(amount, duration)` in
+;; `shared.lua`): the game time drops to `amount` and comes back to
+;; normal along `duration`, in real time. A new slow restarts it.
+task SlowMotion () {
+    var e = await :Slow
+    loop {
+        set e = par :any {
+            await :Slow
+        } with {
+            val st = [ v=e.amount ]
+            eng.slow(st.v)
+            spawn {
+                loop on :tick {
+                    eng.slow(st.v)
+                }
+            }
+            await TweenReal(e.duration, st, [v=1], cubic_in_out)
+            eng.slow(1)
+            await :Slow
+        }
+    }
+}
+
+;; A tween in real time (as the global `trigger` of the original).
+task TweenReal (dur, target, source, method) {
+    val from = []
+    loop k, _ in source {
+        set from@(k) = target@(k)
+    }
+    var timer = 0
+    loop e on :tick {
+        set timer += e.us / 1000000
+        val t = method(timer / dur)
+        loop k, v in source {
+            set target@(k) = lerp(t, from@(k), v)
+        }
+        until timer > dur
+    }
+}
+
+;; Shows the bar of hp for `n` seconds, as `Unit:show_hp`: every call
+;; restarts it (the bar shows while any is on).
+task ShowHp (u, n) {
+    set u.hp_shown += 1
+    defer {
+        set u.hp_shown -= 1
+    }
+    await((n || 2) * 1s)
+}
+
+;; The bar of hp of a unit, as `HPBar:draw`.
+func draw_hp_bar (u, w, h, color) {
+    if u.hp_shown > 0 {
+        eng.push(u.x, u.y, 0, u.hit.s.x)
+        eng.line(u.x - 0.5*w, u.y - h, u.x + 0.5*w, u.y - h, bg@(-3), 2)
+        val n = remap(u.hp, 0, u.max_hp, 0, 1)
+        eng.line(u.x - 0.5*w, u.y - h, u.x - 0.5*w + n*w, u.y - h,
+                 if u.hit.f > 0 => fg@0 => color, 2)
+        eng.pop()
+    }
+}
+
+;; Bounces on a wall with an axis-aligned normal, as `Unit:bounce`.
+func bounce (u, nx, ny) {
+    val vx, vy = body_vel(u.b)
+    if nx == 0 {
+        body_set(u.b, :velocity, vx, -vy)
+        set u.r = 2*math.pi - u.r
+    }
+    if ny == 0 {
+        body_set(u.b, :velocity, -vx, vy)
+        set u.r = math.pi - u.r
+    }
+}
+
+;; The angle from a unit to a point.
+func angle_to (u, x, y) {
+    cmath.atan2(y - u.y, x - u.x)
+}
+
+;; A unit of the snake. `u` has `character` and `level`, and `x`, `y`,
+;; `r` for the leader. `fx` is the pool of the effects of the arena.
+task Unit (A, u, fx) {
+    set u.kind    = :player
+    set u.classes = character_classes@(u.character)
+    set u.color   = character_colors@(u.character)
+    set u.hit     = hfx(1)
+    set u.shoot   = hfx(1)
+    set u.hp_shown = 0
+    set u.x = u.x || 0
+    set u.y = u.y || 0
+    set u.r = u.r || 0
+    unit_stats(u, true, A.ng)
+    body(A.w, u, :dynamic, u.x, u.y, :player, [:rect, 9, 9])
+    body_set(u.b, :angle, u.r)
+    defer {
+        body_free(A.w, u.b)
+    }
+    spawn Springs(u.hit.s, u.shoot.s)
+
+    spawn {
+        loop on :draw {
+            eng.push(u.x, u.y, u.r, u.hit.s.x*u.shoot.s.x)
+            eng.rect(u.x, u.y, 9, 9, 3, 3,
+                     if (u.hit.f > 0) || (u.shoot.f > 0) => fg@0 => u.color)
+            eng.pop()
+            draw_hp_bar(u, 9, 9, green@0)
+        }
+    }
+
+    ;; the walls: the leader bounces, and the followers feel it in turn
+    spawn {
+        loop e on :collision.enter until (it.b == u.b) && (it.other.kind == :wall) {
+            if u.leader {
+                spawn HfxUse(u.hit, 0.5, 200, 10, 0.1)
+                spring_shake(2, math.pi - u.r)
+                bounce(u, e.nx, e.ny)
+                val p = rfloat(0.9, 1.1)
+                play(player_hit_wall1, [pitch=p, volume=0.1])
+                play(pop1, [pitch=p, volume=0.2])
+                loop i, f in A.units {
+                    if i > 0 {
+                        spawn {
+                            await((i*(10.6/u.v)) * 1s)
+                            spawn HfxUse(f.hit, 0.5, 200, 10, 0.1)
+                            play(player_hit_wall1, [pitch=p + 0.025*i, volume=0.1])
+                            play(pop1, [pitch=p + 0.05*i, volume=0.2])
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    ;; the enemies: both push and hit
+    spawn {
+        loop e on :collision.enter until (it.b == u.b) && (it.other.kind == :enemy) {
+            val o = e.other
+            push(o, rfloat(25, 35)*(u.knockback_m || 1), angle_to(u, o.x, o.y))
+            hit(o, if (u.character == "vagrant") || (u.character == "psykeeper") => 2*u.dmg => u.dmg)
+            hit(u, o.dmg)
+            spawn @fx HitCircle(e.x, e.y, [rs=6, color=fg@0, duration=0.1])
+            loop _ in 2 {
+                spawn @fx HitParticle(e.x, e.y, [color=u.color])
+            }
+            loop _ in 2 {
+                spawn @fx HitParticle(e.x, e.y, [color=o.color])
+            }
+        }
+    }
+
+    par :any {
+        ;; the life of the unit: until its hp ends
+        loop e on :Hit until it.to == u {
+            spawn HfxUse(u.hit, 0.25, 200, 10)
+            spawn ShowHp(u)
+            val dmg = math.max(unit_damage(u, e.dmg), 0)
+            set u.hp -= dmg
+            play(rtable([player_hit1, player_hit2]), [pitch=rfloat(0.95, 1.05), volume=0.5])
+            shake(4, 0.5)
+            set A.damage_taken += dmg
+            trace("unit.hit", u.character ++ " " ++ string.format("%.1f", u.hp))
+            until u.hp <= 0
+        }
+    } with {
+        ;; the movement, in every tick of game time
+        var following = false
+        loop us on :clock {
+            val dt = us / 1000000
+            if u.leader {
+                ;; the path, as `previous_positions` (every 0.01s: every tick)
+                set A.path = [ [x=u.x, y=u.y, r=u.r] ] ++ (A.path || [])
+                if #A.path > 256 {
+                    set A.path@(256) = nil
+                }
+            }
+            set u.x, u.y = body_pos(u.b)
+            if u.leader {
+                if !A.menu {
+                    if HELD.left > 0 {
+                        set u.r -= 1.66*math.pi*dt
+                    }
+                    if HELD.right > 0 {
+                        set u.r += 1.66*math.pi*dt
+                    }
+                }
+                var total = 0
+                loop _, o in A.units {
+                    set total += o.max_v
+                }
+                set total = math.floor(total / #A.units)
+                body_set(u.b, :velocity, total*math.cos(u.r), total*math.sin(u.r))
+                if !A.menu {
+                    val vx, vy = body_vel(u.b)
+                    val hd = remap(math.abs(u.x - W/2), 0, 192, 1, 0)
+                    val vd = remap(math.abs(u.y - H/2), 0, 108, 1, 0)
+                    set CAM.x += remap(vx, -100, 100, -24*hd, 24*hd)*dt
+                    set CAM.y += remap(vy, -100, 100, -8*vd, 8*vd)*dt
+                    set CAM.r = ifs {
+                        HELD.right > 0 => lerp_angle_dt(0.01, dt, CAM.r, math.pi/256)
+                        HELD.left > 0  => lerp_angle_dt(0.01, dt, CAM.r, -math.pi/256)
+                        else           => lerp_angle_dt(0.005, dt, CAM.r, 0)
+                    }
+                }
+                body_set(u.b, :angle, u.r)
+            } else {
+                ;; the place along the path of the leader
+                val leader = A.units@0
+                val target = 10.4*u.index
+                var sum = 0
+                var prev = leader
+                var p = nil
+                loop i, q in A.path || [] {
+                    set sum += math.sqrt((prev.x - q.x)*(prev.x - q.x) + (prev.y - q.y)*(prev.y - q.y))
+                    if sum >= target {
+                        set p = A.path@(i-1)
+                        break
+                    }
+                    set prev = q
+                }
+                if p {
+                    body_set(u.b, :position, p.x, p.y)
+                    set u.r = p.r
+                    if !following {
+                        set following = true
+                        play(spawn1, [pitch=rfloat(0.8, 1.2), volume=0.15])
+                        loop _ in rint(3, 4) {
+                            spawn @fx HitParticle(u.x, u.y, [color=u.color])
+                        }
+                        spawn @fx HitCircle(u.x, u.y, [rs=10, color=fg@0, scale_down=true,
+                                                       duration=0.3, change_color=[0.5, u.color]])
+                    }
+                } else {
+                    set u.r = body_angle(u.b)
+                }
+            }
+        }
+    }
+
+    ;; death, as the end of `Player:hit`
+    trace("unit.die", u.character)
+    play(hit4, [pitch=rfloat(0.95, 1.05), volume=0.5])
+    slow(0.25, 1)
+    loop _ in rint(4, 6) {
+        spawn @fx HitParticle(u.x, u.y, [color=u.color])
+    }
+    spawn @fx HitCircle(u.x, u.y, [rs=12, scale_down=true, duration=0.3, change_color=[0.5, u.color]])
+    snake_remove(A, u)
+}
+
+;; Removes a dead unit from the snake, as `recalculate_followers`: a new
+;; leader starts a new path, and the followers take their new places.
+func snake_remove (A, u) {
+    val us = []
+    loop _, o in A.units {
+        if o != u {
+            set us@+ = o
+        }
+    }
+    set A.units = us
+    if u.leader && (#us > 0) {
+        set (us@0).leader = true
+        set A.path = []
+    }
+    loop i, o in us {
+        set o.index = i
+    }
+    if #us == 0 {
+        emit @:global :Arena.died
+    }
+}
