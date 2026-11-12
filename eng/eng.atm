@@ -55,6 +55,9 @@ val eng = [
     pop = func () {
         `eg_pop();`
     },
+    rotate = func (r) {
+        `eg_rotate(eg_dbl($r));`
+    },
     translate = func (x, y) {
         `eg_translate(eg_dbl($x), eg_dbl($y));`
     },

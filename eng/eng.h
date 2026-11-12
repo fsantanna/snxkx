@@ -448,16 +448,18 @@ static void eg_rect (double x, double y, double w, double h, double rx, double r
         EG_PX[3]=x;   EG_PY[3]=y+h;
         n = 4;
     } else {
-        if (rx > w/2) rx = w/2;
-        if (ry > h/2) ry = h/2;
+        // as Graphics::rectangle of LÖVE 11: the radii a little under half
+        // the sides, and each corner in points/4 + 1 segments
         if (ry <= 0) ry = rx;
+        if (w >= 0.02) rx = fmin(rx, w/2 - 0.01);
+        if (h >= 0.02) ry = fmin(ry, h/2 - 0.01);
         int p = eg_points(rx, ry) / 4;
         if (p < 1) p = 1;
         double hp = M_PI/2;
-        n = eg_arc_pts(n, x+w-rx, y+h-ry, rx, ry, 0,    hp,    p);
-        n = eg_arc_pts(n, x+rx,   y+h-ry, rx, ry, hp,   2*hp,  p);
-        n = eg_arc_pts(n, x+rx,   y+ry,   rx, ry, 2*hp, 3*hp,  p);
-        n = eg_arc_pts(n, x+w-rx, y+ry,   rx, ry, 3*hp, 4*hp,  p);
+        n = eg_arc_pts(n, x+w-rx, y+h-ry, rx, ry, 0,    hp,    p+1);
+        n = eg_arc_pts(n, x+rx,   y+h-ry, rx, ry, hp,   2*hp,  p+1);
+        n = eg_arc_pts(n, x+rx,   y+ry,   rx, ry, 2*hp, 3*hp,  p+1);
+        n = eg_arc_pts(n, x+w-rx, y+ry,   rx, ry, 3*hp, 4*hp,  p+1);
     }
     if (lw > 0) {
         eg_stroke(n, 1, lw, c);
