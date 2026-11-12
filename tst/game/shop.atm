@@ -1,0 +1,18 @@
+;; The shop of a new run, by script: two cards bought, a reroll, GO.
+include "../../src/game.atm"
+spawn Background()
+spawn Input()
+val run = [ level=1, loop=0, gold=3, units=[], passives=[], shop_level=1, shop_xp=0 ]
+spawn {
+    loop e on :mouse.dn {
+        print("click", e.x, e.y, "gold", run.gold, "units", #run.units)
+    }
+}
+spawn {
+    val e = await :goto
+    print("goto", e.screen, e.text)
+    loop _, u in run.units {
+        print(u.character, u.level, u.reserve@0, u.reserve@1)
+    }
+}
+await Shop(run)

@@ -1,0 +1,669 @@
+;; The shop between levels, as `BuyScreen` of the original
+;; (`buy_screen.lua`): three cards of units to buy, the party and its
+;; classes, the reroll, the lock of the cards, the level of the shop, and
+;; GO, which starts the next level.
+;;
+;; The run keeps the data: `run.units` (records [character, level,
+;; reserve=[n1, n2]], the copies bought toward the next level), `run.gold`,
+;; `run.shop_level`, `run.shop_xp`, `run.locked`, `run.cards`. The cards
+;; and the icons read the units when they draw, so a sale needs no
+;; refresh; the party is rebuilt when the units change, as the original.
+;;
+;; Not yet ported: the texts that explain an object under the mouse
+;; (`InfoText`), the dragging of a unit to another place in the party, the
+;; items, the tutorial and its button "?".
+
+;; The images of the classes, by name.
+val CLASS_IMAGES = do {
+    val t = []
+    loop k, _ in CLASS_SETS {
+        set t@(k) = image(k)
+    }
+    t
+}
+
+func max_units (run) {
+    math.max(7, math.min(7 + (run.ng || 0) + run.loop, 12))
+}
+
+;; The experience of each level of the shop.
+func shop_max_xp (level) {
+    match level { 1 => 3 ; 2 => 4 ; 3 => 5 ; 4 => 6 ; else => 0 }
+}
+
+;; A text, made once for each string.
+val SHOP_TEXTS = []
+func shop_text (s) {
+    if !SHOP_TEXTS@(s) {
+        set SHOP_TEXTS@(s) = text([ [text=s, font=pixul_font, alignment=:center] ])
+    }
+    SHOP_TEXTS@(s)
+}
+
+;;; BUTTONS ;;;
+
+;; A button of the shop (`RerollButton`, `LockButton`, `LevelButton`,
+;; `GoButton`): `look()` gives its size, texts, and color out of the
+;; mouse, which may change; over the mouse, it is white. A click of
+;; either mouse button emits `:Button.click [id, but, spring]` to `owner`.
+task ShopButton (owner, id, x, y, look) {
+    val s = spring(1)
+    set pub = [ spring=s ]
+    spawn UISprings(s)
+    val draw = func (over) {
+        val l = look()
+        eng.push(x, y, 0, s.x)
+        eng.rect(x, y, l.w, l.h, 4, 4, if over => fg@0 => l.color)
+        text_draw(shop_text(if over => l.over => l.out), x, y + 1)
+        if l.xp {
+            ;; the experience of the shop, as bars
+            loop i in l.xp@0 {
+                val bx = x + 0.9*l.w + i*5
+                eng.line(bx, y - l.h/3, bx, y + l.h/3, if i < l.xp@1 => fg@0 => bg@1, 2)
+            }
+        }
+        eng.pop()
+    }
+    val inside = func () {
+        val l = look()
+        val mx, my = eng.mouse()
+        (mx >= x - l.w/2) && (mx <= x + l.w/2) && (my >= y - l.h/2) && (my <= y + l.h/2)
+    }
+    loop {
+        if !inside() {
+            par :any {
+                await :mouse.mv until inside()
+            } with {
+                loop on :draw {
+                    draw(false)
+                }
+            }
+        }
+        play(ui_hover1, [pitch=rfloat(1.3, 1.5), volume=0.5])
+        play(pop2, [pitch=rfloat(0.95, 1.05), volume=0.5])
+        spring_pull(s, 0.2, 200, 10)
+        par :any {
+            await :mouse.mv until !inside()
+        } with {
+            loop e on :mouse.dn {
+                emit @owner :Button.click [ id=id, but=e.but, spring=s ]
+            }
+        } with {
+            loop on :draw {
+                draw(true)
+            }
+        }
+    }
+}
+
+;;; CLASSES ;;;
+
+;; The pips of the icon of a class, by its thresholds: [x, y1, y2] each
+;; (`ClassIcon:draw`).
+func class_pips (s) {
+    ifs {
+        s@0 == 1 => [ [0, 26, 26] ]
+        (s@0 == 2) && !s@2 => [ [-3, 20, 25], [-3, 27, 32], [4, 20, 25], [4, 27, 32] ]
+        s@0 == 2 => [ [-5, 21, 24], [-5, 28, 31], [0, 21, 24], [0, 28, 31], [5, 21, 24], [5, 28, 31] ]
+        else => [ [-3, 19, 22], [-3, 24, 27], [-3, 29, 32], [4, 19, 22], [4, 24, 27], [4, 29, 32] ]
+    }
+}
+
+;; Whether the units reach the first set of a class.
+func class_lit (class, units) {
+    class_counts(units)@(class) >= CLASS_SETS@(class)@0
+}
+
+;; The icon of a class (`ClassIcon`): in its color when the units reach
+;; its first set, with a pip per unit of the class. On a card, `next` is
+;; the character of the card: the pip it would add blinks.
+task ClassIcon (x, y, class, units, next, s) {
+    spring_pull(s, 0.2, 200, 10)
+    spawn UISprings(s)
+    val sets = CLASS_SETS@(class)
+    val pips = class_pips(sets)
+    var flash = false
+    spawn {
+        loop {
+            await 500ms
+            set flash = !flash
+        }
+    }
+    val c = class_colors@(class)
+    val ramp = RAMPS@(class_color_strings@(class))
+    loop on :draw {
+        val n = class_counts(units)@(class)
+        var next_n = nil
+        if next {
+            set next_n = n + 1
+            if next_n > sets@(#sets - 1) {
+                set next_n = nil
+            }
+            loop _, u in units {
+                if unit_character(u) == next {
+                    set next_n = nil
+                }
+            }
+        }
+        val lit = n >= sets@0
+        eng.push(x, y, 0, s.x)
+        eng.rect(x, y, 16, 24, 4, 4, if lit => c => bg@3)
+        draw_image(CLASS_IMAGES@(class), x, y, 0, 0.3, 0.3, if lit => ramp@(-5) => bg@10)
+        eng.rect(x, y + 26, 16, 16, 3, 3, bg@3)
+        loop i, p in pips {
+            val col = ifs {
+                next_n == (i + 1) => if flash => c => bg@10
+                n >= (i + 1) => c
+                else => bg@10
+            }
+            if sets@0 == 1 {
+                eng.rect(x, y + 26, 3, 9, nil, nil, col)
+            } else {
+                eng.line(x + p@0, y + p@1, x + p@0, y + p@2, col, 3)
+            }
+        }
+        eng.pop()
+    }
+}
+
+;;; CARDS ;;;
+
+;; The marks of the copies of a character in the party, on its card:
+;; [dx, size] each (`ShopCard:draw`).
+func owned_marks (character, units) {
+    var n = 0
+    loop _, u in units {
+        if unit_character(u) == character {
+            set n += match unit_level(u) { 1 => 1 ; 2 => 3 ; else => 9 }
+            if u.reserve {
+                set n += (u.reserve@1 || 0)*3 + (u.reserve@0 || 0)
+            }
+        }
+    }
+    match n {
+        1 => [[0, 2]] ; 2 => [[0, 2], [4, 2]] ; 3 => [[0, 4]] ; 4 => [[0, 4], [5, 2]]
+        5 => [[0, 4], [5, 2], [9, 2]] ; 6 => [[0, 4], [6, 4]] ; 7 => [[0, 4], [6, 4], [11, 2]]
+        8 => [[0, 4], [6, 4], [11, 2], [15, 2]]
+        else => []
+    }
+}
+
+;; The places of the icons of the classes of a card.
+func card_classes (x, y, character) {
+    val cs = character_classes@(character)
+    val dx = match #cs { 2 => -10 ; 3 => -20 ; else => 0 }
+    val out = []
+    loop i, c in cs {
+        set out@+ = [ c, x + dx + i*20, y + 6 ]
+    }
+    out
+}
+
+;; A card of a unit to buy (`ShopCard`, with its `CharacterIcon` and its
+;; `ClassIcon`s). A click asks the shop to buy it (`:Shop.buy [i]`); the
+;; card ends when the shop answers `:Shop.bought [i]` or rerolls, and
+;; bounces when it answers `:Shop.denied [i]`.
+task ShopCard (shop, i, x, y, character, units) {
+    val s = spring(1)
+    val is = spring(1)          ;; of the icon
+    spring_pull(s, 0.2, 200, 10)
+    spawn UISprings(s, is)
+    val cost = character_tiers@(character)
+    val name = shop_text("[" ++ character_color_strings@(character) ++ "]" ++ string.lower(character_names@(character)))
+    val ramp = RAMPS@(character_color_strings@(character))
+    val color = character_colors@(character)
+    val cs = []
+    pin icons = tasks()
+    loop _, ci in card_classes(x, y, character) {
+        val sp = spring(1)
+        set cs@+ = sp
+        spawn @icons ClassIcon(ci@1, ci@2, ci@0, units, character, sp)
+    }
+    val p = [ sx=1 ]            ;; the pulse while selected
+    var selected = false
+    spawn {
+        loop on :draw {
+            eng.push(x, y, 0, p.sx*s.x)
+            if selected {
+                eng.rect(x, y, 80, 90, 6, 6, bg@(-1))
+            }
+            loop _, q in owned_marks(character, units) {
+                eng.rect(x + 16 + q@0, y - 33, q@1, q@1, nil, nil, color)
+            }
+            eng.pop()
+            eng.push(x, y - 26, 0, is.x)
+            eng.rect(x, y - 33, 14, 14, 3, 3, color)
+            print_centered(pixul_font, tostring(cost), x + 0.5, y - 31, 0, 1, 1, ramp@(-5))
+            text_draw(name, x, y - 16)
+            eng.pop()
+        }
+    }
+    spawn {
+        loop on :Shop.denied until it.i == i {
+            spring_pull(s, 0.2, 200, 10)
+            spring_pull(is, 0.2, 200, 10)
+            loop _, sp in cs {
+                spring_pull(sp, 0.2, 200, 10)
+            }
+        }
+    }
+    val inside = func () {
+        val mx, my = eng.mouse()
+        (mx >= x - 40) && (mx <= x + 40) && (my >= y - 45) && (my <= y + 45)
+    }
+    par :any {
+        await :Shop.bought until it.i == i
+    } with {
+        loop {
+            if !inside() {
+                await :mouse.mv until inside()
+            }
+            play(ui_hover1, [pitch=rfloat(1.3, 1.5), volume=0.5])
+            play(pop2, [pitch=rfloat(0.95, 1.05), volume=0.5])
+            set selected = true
+            spring_pull(s, 0.1)
+            spring_pull(is, 0.1, 200, 10)
+            loop _, sp in cs {
+                spring_pull(sp, 0.1, 200, 10)
+            }
+            par :any {
+                await :mouse.mv until !inside()
+            } with {
+                loop on :mouse.dn until it.but == 1 {
+                    emit @shop :Shop.buy [ i=i ]
+                }
+            } with {
+                ;; as `every_immediate(1.4, ...)` of two tweens
+                loop {
+                    await Tween(0.7, p, [sx=0.97], linear)
+                    await Tween(0.7, p, [sx=1.03], linear)
+                }
+            }
+            set selected = false
+            spawn Tween(0.1, p, [sx=1], linear)
+        }
+    }
+}
+
+;; The effects of a card that is bought, as `ShopCard:die`: at its icon
+;; and at the icons of its classes.
+task CardGone (x, y, character, units, fx) {
+    spawn @fx SpawnEffect(x, y - 22, character_colors@(character), fx)
+    loop _, ci in card_classes(x, y, character) {
+        spawn @fx SpawnEffect(ci@1, ci@2 + 4, if class_lit(ci@0, units) => class_colors@(ci@0) => bg@3, fx)
+    }
+}
+
+;;; PARTY ;;;
+
+;; The price of a unit of the party, or of one copy toward its next
+;; level (`get_sale_price`).
+func sale_price (character, level, reserve) {
+    val t = character_tiers@(character)
+    val base = match level { 1 => t ; 2 => 2*t ; else => 6*t }
+    base + (reserve && (reserve@1*t*2 + reserve@0*t) || 0)
+}
+
+;; A square of the party (`CharacterPart`): a unit with its level, or a
+;; copy toward its next level (`copy` is its level). A right click sells
+;; it (`:Shop.sell [i, copy]`).
+task CharacterPart (shop, i, x, y, u, copy, sc) {
+    val s = spring(1)
+    spring_pull(s, 0.2, 200, 10)
+    spawn UISprings(s)
+    val level = copy || u.level
+    val ramp = RAMPS@(character_color_strings@(u.character))
+    spawn {
+        loop on :draw {
+            eng.push(x, y, 0, (sc || 1)*s.x)
+            eng.rect(x, y, 14, 14, 3, 3, character_colors@(u.character))
+            print_centered(pixul_font, tostring(level), x + 0.5, y + 2, 0, 1, 1, ramp@(-5))
+            eng.pop()
+        }
+    }
+    val inside = func () {
+        val mx, my = eng.mouse()
+        val h = 10*(sc || 1)
+        (mx >= x - h) && (mx <= x + h) && (my >= y - h) && (my <= y + h)
+    }
+    var created = true          ;; as `just_created`, for 0.1s
+    spawn {
+        await 100ms
+        set created = false
+    }
+    loop {
+        if !inside() {
+            await :mouse.mv until inside()
+        }
+        play(ui_hover1, [pitch=rfloat(1.3, 1.5), volume=0.5])
+        spring_pull(s, 0.2, 200, 10)
+        par :any {
+            await :mouse.mv until !inside()
+        } with {
+            loop on :mouse.dn until (it.but == 3) && !created {
+                emit @shop :Shop.sell [ i=i, copy=copy ]
+            }
+        }
+    }
+}
+
+;; The party: the squares of the units and of their copies, and the
+;; classes (`set_party_and_sets`).
+task Party (shop, run, fx) {
+    pin ps = tasks()
+    loop i, u in run.units {
+        val y = 40 + i*19
+        val x = W - 30
+        spawn @ps CharacterPart(shop, i, x, y, u)
+        var px = x - 20
+        if u.reserve@1 == 1 {
+            spawn @ps CharacterPart(shop, i, px, y, u, 2)
+            set px -= 20
+        }
+        loop _ in u.reserve@0 {
+            spawn @ps CharacterPart(shop, i, px, y, u, 1, 0.9)
+            set px -= 20
+        }
+        if u.spawn_effect {
+            spawn @fx SpawnEffect(x, y, character_colors@(u.character), fx)
+            set u.spawn_effect = false
+        }
+    }
+    val cls = classes_of(run.units)
+    val w = if #cls <= 6 => 2 => 3
+    loop i, c in cls {
+        spawn @ps ClassIcon((if #cls <= 6 => 319 => 308) + (i % w)*20, 45 + (i // w)*56, c, run.units, nil, spring(1))
+    }
+    await(false)
+}
+
+;;; RULES ;;;
+
+;; Three characters for the cards, by the odds of the level of the shop,
+;; not all of them without an attack (`set_cards`).
+func roll_cards (run) {
+    val odds = level_to_shop_odds@(run.shop_level)
+    var cs = nil
+    loop {
+        set cs = []
+        loop _ in 3 {
+            val tier = rweighted(odds) + 1
+            set cs@+ = rtable(tier_to_characters@(tier))
+        }
+        var all_idle = true
+        loop _, c in cs {
+            if X.nin(c, non_attacking_characters) {
+                set all_idle = false
+            }
+        }
+        until !all_idle
+    }
+    cs
+}
+
+;; Buys a character, as `BuyScreen:buy`: a copy toward the next level of
+;; the unit of the party, or a new unit. Returns whether it bought.
+func shop_buy (run, character) {
+    val cost = character_tiers@(character)
+    var u = nil
+    loop _, o in run.units {
+        if o.character == character {
+            set u = o
+        }
+    }
+    ifs {
+        u && (run.gold >= cost) => {
+            if u.level == 3 {
+                false
+            } else {
+                set run.gold -= cost
+                set u.reserve@0 += 1
+                ifs {
+                    (u.level == 1) && (u.reserve@0 > 1) => {
+                        set u.reserve@0 = 0
+                        set u.level = 2
+                        set u.spawn_effect = true
+                    }
+                    (u.level == 2) && (u.reserve@0 > 2) && (u.reserve@1 == 1) => {
+                        set u.reserve@1 = 0
+                        set u.reserve@0 = 0
+                        set u.level = 3
+                        set u.spawn_effect = true
+                    }
+                    (u.level == 2) && (u.reserve@0 > 2) => {
+                        set u.reserve@1 += 1
+                        set u.reserve@0 = 0
+                    }
+                }
+                true
+            }
+        }
+        #run.units >= max_units(run) => false
+        run.gold >= cost => {
+            set run.gold -= cost
+            set run.units@+ = [ character=character, level=1, reserve=[0, 0] ]
+            true
+        }
+        else => false
+    }
+}
+
+;; Sells a unit of the party, or a copy toward its next level.
+func shop_sell (run, i, copy) {
+    val u = run.units@(i)
+    if copy {
+        set run.gold += sale_price(u.character, copy)
+        set u.reserve@(copy - 1) -= 1
+    } else {
+        set run.gold += sale_price(u.character, u.level, u.reserve)
+        vector.remove(run.units, i)
+    }
+}
+
+;;; SHOP ;;;
+
+;; The shop. It emits `:goto` to the arena on GO.
+task Shop (run) {
+    val me = task
+    pin fx = tasks()
+
+    ;; the texts
+    val gold_text = [ t=shop_text("[wavy_mid, fg]shop [fg]- gold: [yellow]" ++ tostring(run.gold)) ]
+    val party_text = [ t=nil ]
+    val set_party_text = func () {
+        set party_text.t = shop_text("[wavy_mid, fg]party " ++ tostring(#run.units) ++ "/" ++ tostring(max_units(run)))
+    }
+    set_party_text()
+    val elite = ifs {
+        (((run.level - 25*run.loop) % 6) == 0) || ((run.level % 25) == 0) => " (elite)"
+        ((run.level - 25*run.loop) % 3) == 0 => " (hard)"
+        else => ""
+    }
+    val level_text = shop_text("[fg]Lv." ++ tostring(run.level) ++ elite)
+    spawn {
+        loop on :draw {
+            text_draw(shop_text("[wavy_mid, fg]items"), 32, 145)
+            text_draw(level_text, 265, H - 20)
+            text_draw(gold_text.t, 64, 20)
+            text_draw(shop_text("[wavy_mid, fg]classes"), 328, 20)
+            text_draw(party_text.t, 440, 20)
+        }
+    }
+    ;; on a change of the gold, a new text, for `nudge_down` to start again
+    pin nudges = tasks()
+    spawn {
+        loop on :Shop.gold {
+            set gold_text.t = text([ [text="[wavy_mid, fg]shop [fg]- [fg, nudge_down]gold: [yellow, nudge_down]" ++ tostring(run.gold),
+                                      font=pixul_font, alignment=:center] ])
+            spawn @nudges NudgeDown(gold_text.t)
+        }
+    }
+
+    ;; the cards: the locked ones of the last visit, or new ones (the
+    ;; original rolls them in either case)
+    val rolled = roll_cards(run)
+    if !run.locked || !run.cards {
+        set run.cards = rolled
+    }
+    val cards_at = [60, 140, 220]
+    spawn {
+        loop {
+            do {
+                pin cs = tasks()
+                loop i in 3 {
+                    if run.cards@(i) {
+                        spawn @cs ShopCard(task, i, cards_at@(i), 75, run.cards@(i), run.units)
+                    }
+                }
+                await :Shop.reroll
+            }
+        }
+    }
+
+    ;; the party, rebuilt when the units change
+    spawn {
+        loop {
+            do {
+                pin p = tasks()
+                spawn @p Party(task, run, fx)
+                await :Shop.party
+            }
+        }
+    }
+
+    ;; the buttons
+    pin bs = tasks()
+    spawn @bs ShopButton(task, :reroll, 150, 18, \{
+        [ w=54, h=16, out="[bg10]reroll: [yellow]2", over="[fgm5]reroll: 2", color=bg@1 ] })
+    spawn @bs ShopButton(task, :lock, 205, 18, \{
+        val t = if run.locked => "unlock" => "lock"
+        [ w=(if run.locked => 44 => 32), h=16, out=(if run.locked => "[fgm5]" => "[bg10]") ++ t,
+          over="[fgm5]" ++ t, color=(if run.locked => fg@0 => bg@1) ] })
+    spawn @bs ShopButton(task, :level, W/2, 18, \{
+        [ w=16, h=16, out="[bg10]" ++ tostring(run.shop_level), over="[fgm5]" ++ tostring(run.shop_level),
+          color=bg@1, xp=[shop_max_xp(run.shop_level), run.shop_xp] ] })
+    spawn @bs ShopButton(task, :go, W - 90, H - 20, \{
+        [ w=28, h=18, out="[greenm5]GO!", over="[fgm5]GO!", color=green@0 ] })
+    spawn @bs Button(task, :restart, W/2 + 148, 18, "R")
+
+    val coins = func () {
+        play(rtable([coins1, coins2, coins3]), [pitch=rfloat(0.95, 1.05), volume=0.5])
+    }
+    val error = func (s) {
+        play(error1, [pitch=rfloat(0.95, 1.05), volume=0.5])
+        if s {
+            spring_pull(s, 0.2, 200, 10)
+        }
+    }
+    val switch = func (s) {
+        play(ui_switch2, [pitch=rfloat(0.95, 1.05), volume=0.5])
+        if s {
+            spring_pull(s, 0.2, 200, 10)
+        }
+    }
+    loop {
+        val e = await <:Button.click || :Shop.buy || :Shop.sell || :key.dn>
+        val id = ifs {
+            e ?? :Button.click => e.id
+            e ?? :key.dn => match e.name {
+                "R" => :reroll ; "Return" => :go ; else => nil
+            }
+            else => nil
+        }
+        val buy = ifs {
+            e ?? :Shop.buy => e.i
+            (e ?? :key.dn) && X.xin(e.name, ["1", "2", "3"]) => tonumber(e.name) - 1
+            else => nil
+        }
+        val but = (e ?? :Button.click) && e.but || 1
+        ifs {
+            buy && run.cards@(buy) => {
+                val c = run.cards@(buy)
+                val ok = shop_buy(run, c)
+                emit @me :Shop.party
+                if ok {
+                    play(ui_switch1, [pitch=rfloat(0.95, 1.05), volume=0.5])
+                    coins()
+                    emit @me :Shop.bought [ i=buy ]
+                    spawn @fx CardGone(cards_at@(buy), 75, c, run.units, fx)
+                    set run.cards@(buy) = false
+                    set_party_text()
+                    emit @me :Shop.gold
+                } else {
+                    play(error1, [pitch=rfloat(0.95, 1.05), volume=0.5])
+                    emit @me :Shop.denied [ i=buy ]
+                }
+            }
+            e ?? :Shop.sell => {
+                coins()
+                shop_sell(run, e.i, e.copy)
+                emit @me :Shop.gold
+                emit @me :Shop.party
+                set_party_text()
+            }
+            (id == :reroll) && (but == 1) => {
+                if run.gold < 2 {
+                    error(e.spring)
+                } else {
+                    switch(e.spring)
+                    set run.cards = roll_cards(run)
+                    emit @me :Shop.reroll
+                    set run.gold -= 2
+                    emit @me :Shop.gold
+                }
+            }
+            (id == :lock) && (but == 1) => {
+                set run.locked = !run.locked
+                switch(e.spring)
+            }
+            (id == :level) && (but == 1) && (run.shop_level < 5) => {
+                if run.gold < 5 {
+                    error(e.spring)
+                } else {
+                    switch(e.spring)
+                    set run.shop_xp += 1
+                    if run.shop_xp >= shop_max_xp(run.shop_level) {
+                        set run.shop_xp = 0
+                        set run.shop_level += 1
+                    }
+                    set run.gold -= 5
+                    emit @me :Shop.gold
+                }
+            }
+            (id == :level) && (but == 3) && (run.shop_level > 1) => {
+                if run.gold < 10 {
+                    error(e.spring)
+                } else {
+                    switch(e.spring)
+                    set run.shop_xp = 0
+                    set run.shop_level -= 1
+                    set run.gold -= 10
+                    emit @me :Shop.gold
+                }
+            }
+            id == :restart => {
+                play(ui_transition2, [pitch=rfloat(0.95, 1.05), volume=0.5])
+                play(ui_switch2, [pitch=rfloat(0.95, 1.05), volume=0.5])
+                play(ui_switch1, [pitch=rfloat(0.95, 1.05), volume=0.5])
+                emit @:global :goto [ screen=:restart, x=W/2, y=H/2, color=fg@0, text="[wavy, bg]restarting..." ]
+                await(false)
+            }
+            (id == :go) && (but == 1) => {
+                if #run.units == 0 {
+                    play(error1, [pitch=rfloat(0.95, 1.05), volume=0.5])
+                } else {
+                    play(ui_switch2, [pitch=rfloat(0.95, 1.05), volume=0.5])
+                    if e.spring {
+                        spring_pull(e.spring, 0.2, 200, 10)
+                    }
+                    play(ui_switch1, [pitch=rfloat(0.95, 1.05), volume=0.5])
+                    play(ui_transition1, [pitch=rfloat(0.95, 1.05), volume=0.5])
+                    emit @:global :goto [ screen=:arena, x=W - 90, y=H - 20,
+                        color=character_colors@((rtable(run.units)).character),
+                        text="[wavy, bg]level " ++ tostring(run.level) ++ "/" ++ tostring(25*(run.loop + 1)) ]
+                    await(false)
+                }
+            }
+        }
+    }
+}
