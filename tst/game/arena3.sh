@@ -1,0 +1,3 @@
+SNX_FRAMES=3000
+SNX_TRACE=1
+SNX_SHOT=120:$OUT/game-arena3.png

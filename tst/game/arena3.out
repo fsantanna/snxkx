@@ -1,0 +1,15 @@
+23	unit.hit	vagrant 108.2
+39	unit.hit	vagrant 66.4
+53	unit.hit	vagrant 24.7
+66	unit.hit	vagrant -17.1
+66	unit.die	vagrant
+183	unit.hit	swordsman 104.2
+187	unit.hit	swordsman 68.4
+222	unit.hit	swordsman 32.6
+223	unit.hit	archer 61.6
+518	unit.hit	swordsman -3.2
+518	unit.die	swordsman
+719	unit.hit	archer 23.3
+735	unit.hit	archer -15.1
+735	unit.die	archer
+735	died

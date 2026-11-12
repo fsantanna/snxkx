@@ -1,0 +1,13 @@
+;; The arena with strong seekers ahead of a snake of three: the leader
+;; dies, the next unit leads, and so on.
+include "../../src/game.atm"
+
+spawn Background()
+spawn Camera()
+spawn Input()
+spawn SlowMotion()
+
+val A = new_arena(1)
+val r = await Arena(A, [["vagrant", 1], ["swordsman", 1], ["archer", 1]],
+                       [[300, 151, 20], [330, 151, 20], [360, 151, 20], [390, 151, 20]])
+print(eng.tick(), r)
