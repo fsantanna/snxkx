@@ -1,0 +1,123 @@
+;; The enemies of the arena: the seeker (`Seeker` of `enemies.lua`),
+;; without its elite variants yet.
+;;
+;; A seeker chases the leader of the snake, wandering and keeping apart
+;; from the others, until something pushes it: then it tumbles, with no
+;; steering, until it slows down below 25, and chases again. The
+;; original keeps `being_pushed` and `steering_enabled` for that; here
+;; they are the two phases of a loop.
+
+;; As `Seeker:push(f, r)`: an impulse, a spin, and damping.
+func seeker_push (e, f, r) {
+    val n = 1
+    set e.push_force = n*f
+    body_set(e.b, :impulse, n*f*math.cos(r), n*f*math.sin(r))
+    body_set(e.b, :angular_impulse,
+        rtable([rfloat(-12*math.pi, -4*math.pi), rfloat(4*math.pi, 12*math.pi)]))
+    body_set(e.b, :damping, 1.5*(1/n))
+    body_set(e.b, :angular_damping, 1.5*(1/n))
+}
+
+;; A seeker. `e` has `x`, `y`, and `level`.
+task Seeker (A, e, fx) {
+    set e.kind    = :enemy
+    set e.stats   = :seeker
+    set e.classes = [:seeker]
+    set e.color   = red@0
+    set e.hit     = hfx(1)
+    set e.hp_shown = 0
+    set e.r = 0
+    unit_stats(e, true, A.ng)
+    body(A.w, e, :dynamic, e.x, e.y, :enemy, [:rect, 14, 6])
+    body_restitution(e.b, 0.5)
+    val st = steerable(e.b, e.v, 2000, 4*math.pi, 4)
+    set A.enemies@+ = e
+    defer {
+        body_free(A.w, e.b)
+        val es = []
+        loop _, o in A.enemies {
+            if o != e {
+                set es@+ = o
+            }
+        }
+        set A.enemies = es
+    }
+    spawn Springs(e.hit.s)
+
+    spawn {
+        loop on :draw {
+            eng.push(e.x, e.y, e.r, e.hit.s.x)
+            eng.rect(e.x, e.y, 14, 6, 3, 3, if e.hit.f > 0 => fg@0 => e.color)
+            eng.pop()
+            draw_hp_bar(e, 14, 6, red@0)
+        }
+    }
+
+    ;; the walls
+    spawn {
+        loop c on :collision.enter until (it.b == e.b) && (it.other.kind == :wall) {
+            spawn HfxUse(e.hit, 0.15, 200, 10, 0.1)
+            bounce(e, c.nx, c.ny)
+        }
+    }
+
+    par :any {
+        ;; the life of the seeker: until its hp ends
+        loop h on :Hit until it.to == e {
+            spawn HfxUse(e.hit, 0.25, 200, 10)
+            spawn ShowHp(e)
+            val dmg = math.max(unit_damage(e, h.dmg), 0)
+            set e.hp = math.min(e.hp - dmg, e.max_hp)
+            set A.damage_dealt += dmg
+            until e.hp <= 0
+        }
+    } with {
+        ;; the position, in every tick
+        loop on :clock {
+            set e.x, e.y = body_pos(e.b)
+            set e.r = body_angle(e.b)
+        }
+    } with {
+        loop {
+            ;; chasing
+            var p = par :any {
+                loop on :clock {
+                    steer_update(st)
+                    val l = A.units@0
+                    if l {
+                        seek_point(st, l.x, l.y)
+                    }
+                    wander(st, 50, 100, 20)
+                    separate(st, 16, A.enemies)
+                    rotate_towards_velocity(e.b, 0.5)
+                }
+            } with {
+                await :Push until it.to == e
+            }
+            ;; pushed: tumbling with no steering, pushed again or not
+            loop {
+                seeker_push(e, p.f, p.r)
+                set p = par :any {
+                    loop on :clock {
+                        val vx, vy = body_vel(e.b)
+                        until math.sqrt(vx*vx + vy*vy) < 25
+                    }
+                    nil
+                } with {
+                    await :Push until it.to == e
+                }
+                until p == nil
+            }
+            body_set(e.b, :damping, 0)
+            body_set(e.b, :angular_damping, 0)
+        }
+    }
+
+    ;; death, as the end of `Seeker:hit`
+    trace("enemy.die", "seeker")
+    loop _ in rint(4, 6) {
+        spawn @fx HitParticle(e.x, e.y, [color=e.color])
+    }
+    spawn @fx HitCircle(e.x, e.y, [rs=12, scale_down=true, duration=0.3, change_color=[0.5, e.color]])
+    play(rtable([enemy_die1, enemy_die2]), [pitch=rfloat(0.9, 1.1), volume=0.5])
+}
