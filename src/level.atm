@@ -42,8 +42,9 @@ task Quiet (A, foes, spawns) {
             await :all foes
         }
         ;; the critters of the enemies count too (they are not in `foes`)
-        loop on :clock {
+        loop {
             until #A.enemies == 0
+            await :clock
         }
         until (#spawns == 0) && (#foes == 0)
     }
