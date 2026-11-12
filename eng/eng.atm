@@ -223,3 +223,14 @@ func trace (ev, details) {
         print(eng.tick() ++ "\t" ++ ev ++ "\t" ++ (details || "-"))
     }
 }
+
+;;; MATH ;;;
+
+;; What the game needs of C's math beyond `math` of Atmos (see
+;; `doc/compiler.md`, 3).
+val cmath = [
+    atan2 = func (y, x) { `:number.float atan2(eg_dbl($y), eg_dbl($x))` },
+    exp   = func (x)    { `:number.float exp(eg_dbl($x))` },
+    log   = func (x)    { `:number.float log(eg_dbl($x))` },
+    tan   = func (x)    { `:number.float tan(eg_dbl($x))` },
+]
