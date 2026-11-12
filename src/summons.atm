@@ -111,6 +111,9 @@ task Critter (A, x, y, r, v, dmg, parent, fx) {
             if !invulnerable {
                 spawn @fxs HfxUse(c.hit, 0.25, 200, 10)
                 set c.hp -= 1
+                if passive_level(A, "baneling_burst") {
+                    set c.hp = 0            ;; it bursts at once
+                }
             }
             until c.hp <= 0
         }
@@ -175,6 +178,13 @@ task Critter (A, x, y, r, v, dmg, parent, fx) {
     spawn @fx HitCircle(c.x, c.y, [scale_down=true])
     play(rtable([enemy_die1, enemy_die2]), [pitch=rfloat(0.9, 1.1), volume=0.5])
     play(critter2, [pitch=rfloat(0.95, 1.05), volume=0.2])
+    val bb = passive_level(A, "baneling_burst")
+    if bb {
+        shake(2, 0.5)
+        spawn @fx Area(A, [x=c.x, y=c.y, r=c.r, w=parent.area_size_m*24, color=c.color,
+                           dmg=lv(bb, 50, 100, 150, 0), parent=parent], fx)
+        play(rtable([cannoneer1, cannoneer2]), [pitch=rfloat(0.95, 1.05), volume=0.5])
+    }
 }
 
 ;; As `Automaton`: a slow unit of the artificer that chases a random
@@ -184,8 +194,11 @@ task Critter (A, x, y, r, v, dmg, parent, fx) {
 task Automaton (A, x, y, parent, fx, shots) {
     trace("add", string.format("Automaton %.1f %.1f", x, y))
     val a = [ kind=:automaton, w=8, h=8, x=x, y=y, r=0, level=parent.level, stats=:automaton,
-              classes=[:sorcerer, :conjurer], color=character_colors@("artificer"), hit=hfx(1) ]
+              classes=[:sorcerer, :conjurer], color=character_colors@("artificer"), hit=hfx(1), alive=true ]
     unit_stats(a, true, 0)
+    defer {
+        set a.alive = false
+    }
     body(A.w, a, :dynamic, x, y, :player, [:rect, 8, 8])
     body_restitution(a.b, 0.5)
     val st = steerable(a.b, a.v, 2000, 4*math.pi, 4)
@@ -237,6 +250,10 @@ task Automaton (A, x, y, parent, fx, shots) {
                 spawn @shots Projectile(A, [x=a.x + 1.6*8*math.cos(r), y=a.y + 1.6*8*math.sin(r), v=250, r=r,
                     color=parent.color, dmg=parent.dmg, character="artificer", parent=parent, level=parent.level], fx)
             }
+            if parent.rearm {
+                spawn @fx AutomatonShot(A, a, parent, 0.25, fx, shots)
+            }
+            taunt(A, a, parent, fx)
         }
     }
     loop _ in rint(3, 4) {
@@ -368,7 +385,7 @@ task Bomb (A, x, y, parent, fx) {
 ;; (the engineer of level 3) makes it hit harder and faster.
 task Turret (A, x, y, parent, fx, shots) {
     trace("add", string.format("Turret %.1f %.1f", x, y))
-    val o = [ kind=:turret, w=14, h=6, x=x, y=y, r=0, color=orange@0, hit=hfx(1), upgrade_dmg_m=1, upgrade_aspd_m=1 ]
+    val o = [ kind=:turret, w=14, h=6, x=x, y=y, r=0, color=orange@0, hit=hfx(1), upgrade_dmg_m=1, upgrade_aspd_m=1, alive=true ]
     body(A.w, o, :static, x, y, :player, [:rect, 14, 6])
     defer {
         body_free(A.w, o.b)
@@ -418,6 +435,10 @@ task Turret (A, x, y, parent, fx, shots) {
         loop {
             ;; its period shrinks with the upgrades (`set_every_multiplier`)
             await Every([ aspd_m=1/o.upgrade_aspd_m ], rfloat(2.75, 3.5), tk)
+            taunt(A, o, parent, fx)
+            if parent.rearm {
+                spawn @fxs TurretRearm(A, o, parent, fx, shots)
+            }
             loop i in 3 {
                 await((rfloat(0.1, 0.2)) * 1s)
                 spawn @fxs HfxUse(o.hit, 0.25, 200, 10)
@@ -430,6 +451,7 @@ task Turret (A, x, y, parent, fx, shots) {
             }
         }
     }
+    set o.alive = false
     loop _ in rint(3, 4) {
         spawn @fx HitParticle(o.x, o.y, [r=rfloat(0, 2*math.pi), color=o.color])
     }
@@ -441,7 +463,7 @@ task Turret (A, x, y, parent, fx, shots) {
 ;; 6s (3s at level 3), for 12s.
 task Tree (A, x, y, parent, fx) {
     trace("add", string.format("Tree %.1f %.1f", x, y))
-    val o = [ kind=:tree, w=9, h=9, x=x, y=y, r=0, color=fg@0, hit=hfx(1) ]
+    val o = [ kind=:tree, w=9, h=9, x=x, y=y, r=0, color=fg@0, hit=hfx(1), alive=true ]
     body(A.w, o, :static, x, y, :player, [:rect, 9, 9])
     defer {
         body_free(A.w, o.b)
@@ -481,8 +503,13 @@ task Tree (A, x, y, parent, fx) {
             await((if parent.level == 3 => 3 => 6) * 1s)
             spawn @fxs HfxUse(o.hit, 0.2)
             spawn @fx HealingOrb(A, o.x, o.y, fx)
+            taunt(A, o, parent, fx)
+            if parent.rearm {
+                spawn @fxs TreeRearm(A, o, parent, fx)
+            }
         }
     }
+    set o.alive = false
     loop i in 7 {
         if i > 0 {
             await 50ms
@@ -610,4 +637,115 @@ task ForceField (A, u, fx) {
             set shown = !shown
         }
     }
+}
+
+;; As `Gold`: a coin that drops, moves to the units near it, and is
+;; picked up by one (gold for the end of the level). With a miner, the
+;; coin bursts into projectiles (4, or 8 at level 3).
+task Gold (A, x, y, fx, shots) {
+    if A.golds > 30 {
+        return nil
+    }
+    set A.golds += 1
+    trace("add", string.format("Gold %.1f %.1f", x, y))
+    val o = [ kind=:gold, w=3, h=3, x=x, y=y, r=0, hit=hfx(1), color=yellow2@0 ]
+    body(A.w, o, :dynamic, x, y, :ghost, [:rect, 3, 3])
+    defer {
+        body_free(A.w, o.b)
+        set A.golds -= 1
+    }
+    body_restitution(o.b, 0.5)
+    val r = rfloat(0, 2*math.pi)
+    val f = rfloat(2, 4)
+    body_set(o.b, :impulse, f*math.cos(r), f*math.sin(r))
+    body_set(o.b, :angular_impulse, rtable([rfloat(-6*math.pi, -2*math.pi), rfloat(2*math.pi, 6*math.pi)]))
+    body_set(o.b, :damping, 2.5)
+    body_set(o.b, :angular_damping, 5)
+    play(gold1, [pitch=rfloat(0.95, 1.05), volume=0.5])
+    spawn Springs(o.hit.s)
+    spawn {
+        loop on :draw {
+            eng.push(o.x, o.y, o.r, o.hit.s.x)
+            eng.rect(o.x, o.y, 3, 3, 1, 1, if o.hit.f > 0 => fg@0 => o.color)
+            eng.pop()
+        }
+    }
+    spawn {
+        loop on :clock {
+            magnet(A, o)
+        }
+    }
+    await 500ms
+    await :trigger.enter until (it.b == o.b) && (it.other.kind == :player)
+    set A.gold_picked_up += 1
+    trace("gold", tostring(A.gold_picked_up))
+    spawn @fx HitCircle(o.x, o.y, [rs=4, color=fg@0, duration=0.1])
+    loop _ in 2 {
+        spawn @fx HitParticle(o.x, o.y, [color=o.color])
+    }
+    play(rtable([gold2, coins1, coins2, coins3]), [pitch=rfloat(0.9, 1.1), volume=0.3])
+    var th = nil
+    loop _, u in A.units {
+        if u.character == "miner" {
+            set th = u
+        }
+    }
+    if th {
+        play(rtable([scout1, scout2]), [pitch=rfloat(0.95, 1.05), volume=0.35])
+        spawn @fx HitCircle(o.x, o.y, [rs=6])
+        var a = rfloat(0, 2*math.pi)
+        val n = if th.level == 3 => 8 => 4
+        loop _ in n {
+            spawn @shots Projectile(A, [x=o.x + 8*math.cos(a), y=o.y + 8*math.sin(a), v=250, r=a, color=yellow2@0,
+                dmg=th.dmg, character=th.character, parent=th, level=th.level], fx)
+            set a += 2*math.pi/n
+        }
+    }
+}
+
+;; Taunt: a construct may draw the enemies around it for 4s.
+func taunt (A, o, parent, fx) {
+    if parent.taunt && rbool(lv(parent.taunt, 10, 20, 30)) {
+        loop _, e in enemies_in_circle(A, o.x, o.y, 96) {
+            emit @:global :Taunt [ to=e, by=o ]
+        }
+    }
+}
+
+;; Rearm: the constructs act again (an automaton shoots after 0.25s, a
+;; turret fires a burst after 1s, a tree grows an orb after 0.25s).
+task AutomatonShot (A, a, parent, d, fx, shots) {
+    await(d * 1s)
+    val e = closest_enemy(A, a.x, a.y, 96)
+    if e && a.alive {
+        play(turret1, [pitch=rfloat(0.95, 1.05), volume=0.1])
+        play(turret2, [pitch=rfloat(0.95, 1.05), volume=0.1])
+        play(wizard1, [pitch=rfloat(0.95, 1.05), volume=0.1])
+        val r = angle_to(a, e.x, e.y)
+        spawn @fx HitCircle(a.x + 0.8*8*math.cos(r), a.y + 0.8*8*math.sin(r), [rs=6])
+        spawn @shots Projectile(A, [x=a.x + 1.6*8*math.cos(r), y=a.y + 1.6*8*math.sin(r), v=250, r=r,
+            color=parent.color, dmg=parent.dmg, character="artificer", parent=parent, level=parent.level], fx)
+    }
+}
+
+task TurretRearm (A, o, parent, fx, shots) {
+    await 1s
+    pin fxs = tasks()
+    loop _ in 3 {
+        await((rfloat(0.1, 0.2)) * 1s)
+        spawn @fxs HfxUse(o.hit, 0.25, 200, 10)
+        spawn @fx HitCircle(o.x + 0.8*14*math.cos(o.r), o.y + 0.8*14*math.sin(o.r), [rs=6])
+        spawn @shots Projectile(A, [x=o.x + 1.6*14*math.cos(o.r), y=o.y + 1.6*14*math.sin(o.r), v=200, r=o.r,
+            color=o.color, dmg=parent.dmg*(parent.conjurer_buff_m || 1)*o.upgrade_dmg_m,
+            character=parent.character, parent=parent], fx)
+        play(turret1, [pitch=rfloat(0.95, 1.05), volume=0.35])
+        play(turret2, [pitch=rfloat(0.95, 1.05), volume=0.35])
+    }
+    taunt(A, o, parent, fx)
+}
+
+task TreeRearm (A, o, parent, fx) {
+    await 250ms
+    spawn @fx HealingOrb(A, o.x, o.y, fx)
+    taunt(A, o, parent, fx)
 }

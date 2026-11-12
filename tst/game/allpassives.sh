@@ -1,0 +1,3 @@
+SNX_FRAMES=2400
+SNX_TRACE=1
+SNX_SHOT=900:$OUT/game-allpassives.png

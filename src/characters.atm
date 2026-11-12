@@ -185,11 +185,16 @@ func free_place (A) {
 
 ;; As `HealingOrb`: an orb that drifts, is drawn to the units near it,
 ;; and heals the unit with the least hp (in proportion) that takes it.
-task HealingOrb (A, x, y, fx) {
+task HealingOrb (A, x, y, fx, extra) {
+    if A.orbs > 30 {
+        return nil
+    }
+    set A.orbs += 1
     val o = [ kind=:orb, w=4, h=4, x=x, y=y, r=0, hit=hfx(1) ]
     body(A.w, o, :dynamic, x, y, :ghost, [:rect, 4, 4])
     defer {
         body_free(A.w, o.b)
+        set A.orbs -= 1
     }
     body_restitution(o.b, 0.5)
     val r = rfloat(0, 2*math.pi)
@@ -199,6 +204,11 @@ task HealingOrb (A, x, y, fx) {
     body_set(o.b, :damping, 2.5)
     body_set(o.b, :angular_damping, 5)
     play(illusion1, [pitch=rfloat(0.95, 1.05), volume=0.5])
+    ;; the healers: a chance of one more orb
+    val hl = A.cl && A.cl.healer || 0
+    if (hl > 0) && !extra && rbool(if hl == 1 => 15 => 30) {
+        spawn @fx HealAt(A, x, y, fx, true)
+    }
     spawn Springs(o.hit.s)
     spawn {
         loop on :draw {
@@ -211,20 +221,7 @@ task HealingOrb (A, x, y, fx) {
     }
     spawn {
         loop on :clock {
-            set o.x, o.y = body_pos(o.b)
-            set o.r = body_angle(o.b)
-            var n, sx, sy = 0, 0, 0
-            loop _, u in A.units {
-                if circle_hits(o.x, o.y, 16, u) {
-                    set n += 1
-                    set sx += u.x
-                    set sy += u.y
-                }
-            }
-            if n > 0 {
-                val a = math.atan2(sy/n - o.y, sx/n - o.x)
-                body_set(o.b, :force, 20*math.cos(a), 20*math.sin(a))
-            }
+            magnet(A, o)
         }
     }
     ;; it cannot be taken in its first 0.5s
@@ -246,7 +243,39 @@ task HealingOrb (A, x, y, fx) {
         }
     }
     if low {
-        emit @:global :Heal [ to=low, amount=0.2*low.max_hp ]
+        emit @:global :Heal [ to=low, amount=0.2*low.max_hp*(low.heal_effect_m || 1) ]
+    }
+    ;; haste: the units run faster for 4s
+    if passive_level(A, "haste") {
+        loop _, u in A.units {
+            spawn @fx Cursed(u, "hasted", eng.tick()/60, 4)
+        }
+    }
+    ;; divine barrage: the leader shoots five arrows that bounce
+    val db = passive_level(A, "divine_barrage")
+    val l = A.units@0
+    if db && l && rbool(lv(db, 20, 40, 60)) {
+        spawn @fx Barrage(A, l, l.r, 5, [ricochet=3], fx, fx)
+    }
+}
+
+;; Something to pick up (an orb, gold) moves to the units near it: within
+;; 16, or 56 with magnetism.
+func magnet (A, o) {
+    set o.x, o.y = body_pos(o.b)
+    set o.r = body_angle(o.b)
+    val rs = if passive_level(A, "magnetism") => 56 => 16
+    var n, sx, sy = 0, 0, 0
+    loop _, u in A.units {
+        if circle_hits(o.x, o.y, rs, u) {
+            set n += 1
+            set sx += u.x
+            set sy += u.y
+        }
+    }
+    if n > 0 {
+        val a = math.atan2(sy/n - o.y, sx/n - o.x)
+        body_set(o.b, :force, 20*math.cos(a), 20*math.sin(a))
     }
 }
 
@@ -417,6 +446,7 @@ task Character (A, u, fx, shots) {
                 val r = toward(e)
                 spawn @acts Shoot(A, u, r, [pierce=10000, v=40], fx, shots)
                 if sorcerer_due(A, u) {
+                    spawn @acts SorcererRepeat(A, u, fx)
                     spawn @acts Later(0.25, \{ toward(e) }, A, u, [pierce=10000, v=40], fx, shots)
                 }
             }
@@ -425,6 +455,7 @@ task Character (A, u, fx, shots) {
             await 6s
             spawn @acts Construct(A, u, 0, fx, shots)
             if sorcerer_due(A, u) {
+                spawn @acts SorcererRepeat(A, u, fx)
                 spawn @acts Construct(A, u, 0.25, fx, shots)
             }
         }
@@ -439,6 +470,7 @@ task Character (A, u, fx, shots) {
                 await Cooldown(u, 3, \{ near(rs) })
                 spawn @acts PsychicStrike(A, u, rs, 0, fx)
                 if sorcerer_due(A, u) {
+                    spawn @acts SorcererRepeat(A, u, fx)
                     spawn @acts PsychicStrike(A, u, rs, 0.1, fx)
                 }
             }
@@ -511,6 +543,7 @@ task Character (A, u, fx, shots) {
             await Cooldown(u, 6, \{ near(96) })
             spawn @acts Silence(A, u, 0, fx)
             if sorcerer_due(A, u) {
+                spawn @acts SorcererRepeat(A, u, fx)
                 spawn @acts Silence(A, u, 0.5, fx)
             }
         }
@@ -520,6 +553,7 @@ task Character (A, u, fx, shots) {
                 await Every(u, 4, tk)
                 spawn @acts DotAttack(A, u, 42, [duration=rfloat(12, 16)], fx, 0)
                 if sorcerer_due(A, u) {
+                    spawn @acts SorcererRepeat(A, u, fx)
                     spawn @acts DotAttack(A, u, 42, [duration=rfloat(12, 16)], fx, 0.25)
                 }
             }
@@ -562,6 +596,7 @@ task Character (A, u, fx, shots) {
                 await Every(u, 12, tk)
                 spawn @acts Erupt(A, u, 0, fx)
                 if sorcerer_due(A, u) {
+                    spawn @acts SorcererRepeat(A, u, fx)
                     spawn @acts Erupt(A, u, 0.5, fx)
                 }
             }
@@ -622,6 +657,7 @@ task Character (A, u, fx, shots) {
             await 12s
             spawn @acts Ward(A, u, 0, fx)
             if sorcerer_due(A, u) {
+                spawn @acts SorcererRepeat(A, u, fx)
                 spawn @acts Ward(A, u, 0.5, fx)
             }
         }
@@ -702,6 +738,31 @@ task Construct (A, u, d, fx, shots) {
 }
 
 ;;; THE ATTACKS OF THE CHARACTERS ;;;
+
+;; As `Player:sorcerer_repeat`: with the passives of the sorcerers, a field
+;; at a random enemy for each: gravity (pulls), burning (damage over
+;; time), freezing (slows).
+task SorcererRepeat (A, u, fx) {
+    if #A.enemies == 0 {
+        return nil
+    }
+    val e1 = rtable(A.enemies)
+    if u.gravity_field {
+        spawn @fx ForceArea(A, [x=e1.x, y=e1.y, rs=u.area_size_m*24, color=fg@0, character="gravity_field", parent=u], fx)
+    }
+    val e2 = rtable(A.enemies)
+    if u.burning_field {
+        play(fire1, [pitch=rfloat(0.9, 1.1), volume=0.5])
+        spawn @fx DotArea(A, [x=e2.x, y=e2.y, rs=u.area_size_m*24, color=red@0, dmg=30*u.area_dmg_m*(u.dot_dmg_m || 1),
+                              duration=2, character="burning_field"], fx)
+    }
+    val e3 = rtable(A.enemies)
+    if u.freezing_field {
+        play(frost1, [pitch=rfloat(0.8, 1.2), volume=0.3])
+        play(elementor1, [pitch=rfloat(0.9, 1.1), volume=0.3])
+        spawn @fx Area(A, [x=e3.x, y=e3.y, w=u.area_size_m*36, color=blue@0, character="freezing_field", parent=u], fx)
+    }
+}
 
 ;; The psychic strikes a random enemy around it with a small area (and
 ;; another one 0.5s later at level 3).
@@ -830,17 +891,17 @@ task Upgrades (A, u, fx, shots) {
 ;; chance of more casts at level 3; the sorcerers repeat it.
 task Gamble (A, u, fx) {
     pin cs = tasks()
-    spawn @cs Cast(A, u, 1, 0)
+    spawn @cs Cast(A, u, 1, 0, fx)
     if (u.level == 3) && rbool(60) {
         val n = if rbool(40) => (if rbool(20) => 3 => 2) => 1
         loop i in n {
-            spawn @cs Cast(A, u, 1.1 + i*0.1, 0.25*(i + 1))
+            spawn @cs Cast(A, u, 1.1 + i*0.1, 0.25*(i + 1), fx)
         }
     }
     await :all cs
 }
 
-task Cast (A, u, pitch, d) {
+task Cast (A, u, pitch, d, fx) {
     await(d * 1s)
     val gold = A.run && A.run.gold || 0
     val vol = math.max(0, math.min(remap(gold, 0, 50, 0, 0.5), 0.75))
@@ -848,6 +909,7 @@ task Cast (A, u, pitch, d) {
         play(gambler1, [pitch=pitch, volume=vol])
         hit(rtable(A.enemies), 2*gold)
         if sorcerer_due(A, u) {
+            spawn @fx SorcererRepeat(A, u, fx)
             await 250ms
             if #A.enemies > 0 {
                 play(gambler1, [pitch=pitch + 0.05, volume=vol])
@@ -935,7 +997,7 @@ task WardWhenFree (A, o, fx) {
 }
 
 ;; A spawn effect in green, and an orb at its peak if nothing is there.
-task HealAt (A, x, y, fx) {
+task HealAt (A, x, y, fx, extra) {
     await SpawnEffect(x, y, green@0, fx)
     var free = true
     loop _, e in A.enemies {
@@ -944,7 +1006,7 @@ task HealAt (A, x, y, fx) {
         }
     }
     if free {
-        await HealingOrb(A, x, y, fx)
+        await HealingOrb(A, x, y, fx, extra)
     }
 }
 
@@ -1011,6 +1073,9 @@ func unit_buffs (A, u) {
     if has_class(u, "voider") {
         set u.dot_dmg_m = match cl.voider { 2 => 1.4 ; 1 => 1.2 ; else => 1 }
     }
+    if u.call_of_the_void {
+        set u.dot_dmg_m = u.dot_dmg_m*lv(u.call_of_the_void, 1.3, 1.6, 1.9, 1)
+    }
     if (u.character == "flagellant") && (u.level == 3) {
         set u.flagellant_hp_m = 2
     }
@@ -1072,7 +1137,7 @@ func unit_buffs (A, u) {
         set u.heal_effect_m = lv(u.blessing, 1.1, 1.2, 1.3)
     }
     if u.haste {
-        set u.haste_mvspd_m = if u.hasted => math.max(1, math.min(remap(eng.tick()/60 - u.hasted, 0, 4, 1.5, 1), 1.5)) => 1
+        set u.haste_mvspd_m = if u.hasted => math.max(1, math.min(remap(eng.tick()/60 - u.hasted.v, 0, 4, 1.5, 1), 1.5)) => 1
     }
     ;; the leader holding left for more than 1s gives defense to all
     if (i == 0) && u.ouroboros_technique_l {

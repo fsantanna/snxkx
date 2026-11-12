@@ -81,6 +81,10 @@ task EnemyProjectile (A, p, fx) {
                     hit(o, p.dmg)
                     break (p.x, p.y)
                 }
+                (o.kind == :critter) && passive_level(A, "meat_shield") => {
+                    hit(o, 1000)
+                    break (p.x, p.y)
+                }
                 (o.kind == :enemy) && (p.source == :shooter) => {
                     hit(o, 0.5*p.dmg, [from_enemy=true])
                     break (p.x, p.y)

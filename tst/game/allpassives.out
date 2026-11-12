@@ -1,0 +1,88 @@
+26	barrage	swordsman
+46	barrage	swordsman
+60	add	Critter 0.8 -49.1
+60	add	Critter 0.8 -49.1
+66	barrage	swordsman
+86	barrage	swordsman
+105	barrage	swordsman
+120	add	Critter 356.2 150.8
+120	add	Critter 356.2 150.8
+125	barrage	swordsman
+145	barrage	swordsman
+165	barrage	swordsman
+180	add	Critter 364.8 151.0
+180	add	Critter 364.8 151.0
+185	barrage	swordsman
+186	unit.hit	squire 633.2
+204	barrage	swordsman
+224	barrage	swordsman
+240	add	Critter 239.0 150.8
+240	add	Critter 239.0 150.8
+244	barrage	swordsman
+247	add	SpawnMarker 240.0 135.0
+264	barrage	swordsman
+284	barrage	swordsman
+300	add	Critter 106.9 151.0
+300	add	Critter 106.9 151.0
+303	barrage	swordsman
+315	add	Seeker 240.0 135.0
+315	wave	boss
+323	barrage	swordsman
+323	enemy.die	speed_booster
+323	add	Critter 245.3 134.4
+323	add	Critter 245.3 134.4
+323	add	Gold 245.3 134.4
+366	barrage	swordsman
+367	add	SpawnMarker 400.0 135.0
+377	barrage	vagrant
+378	gold	1
+383	add	Critter 131.6 150.9
+383	add	Critter 131.6 150.9
+386	barrage	swordsman
+389	unit.hit	squire 636.3
+389	add	Automaton 184.3 150.9
+406	barrage	swordsman
+425	barrage	swordsman
+443	add	Critter 316.5 150.9
+443	add	Critter 316.5 150.9
+445	barrage	swordsman
+447	add	Seeker 388.0 123.0
+447	enemy.die	seeker
+453	add	Seeker 412.0 123.0
+458	enemy.die	seeker
+458	add	Critter 410.8 124.4
+458	add	Critter 410.8 124.4
+465	barrage	swordsman
+471	add	Seeker 400.0 135.0
+471	enemy.die	seeker
+471	add	Critter 400.0 135.0
+471	add	Critter 400.0 135.0
+477	add	Seeker 388.0 123.0
+480	enemy.die	seeker
+483	add	Seeker 412.0 123.0
+483	barrage	vagrant
+483	enemy.die	speed_booster
+485	barrage	swordsman
+501	add	Seeker 400.0 135.0
+503	add	Critter 362.6 150.9
+503	add	Critter 362.6 150.9
+505	barrage	swordsman
+507	add	Seeker 388.0 123.0
+509	add	Turret 291.2 150.9
+520	enemy.die	speed_booster
+524	barrage	swordsman
+529	enemy.die	seeker
+529	clear	6
+544	barrage	swordsman
+563	add	Critter 177.2 150.9
+563	add	Critter 177.2 150.9
+564	barrage	swordsman
+569	unit.hit	squire 637.5
+572	barrage	vagrant
+584	barrage	swordsman
+604	barrage	swordsman
+623	add	Critter 109.3 150.9
+623	add	Critter 109.3 150.9
+623	barrage	swordsman
+643	barrage	swordsman
+665	barrage	swordsman

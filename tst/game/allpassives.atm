@@ -1,0 +1,21 @@
+;; All the passives at level 3, with a party of every kind, in a level
+;; with elites: the effects run together.
+include "../../src/game.atm"
+spawn Background()
+spawn Camera()
+spawn SlowMotion()
+spawn Input()
+
+val ps = []
+loop _, p in PASSIVE_POOL {
+    set ps@+ = [ passive=p, level=3, xp=0 ]
+}
+val run = [ level=6, loop=0, gold=40, units=[
+    ["vagrant", 3], ["archer", 3], ["scout", 3], ["wizard", 3], ["swordsman", 3], ["squire", 3],
+    ["engineer", 3], ["carver", 3], ["artificer", 3], ["witch", 3], ["gambler", 3], ["miner", 3],
+    ["merchant", 3], ["host", 3], ["assassin", 3],
+], passives=ps, pool=[] ]
+val A = new_arena(6)
+set A.run = run
+spawn Arena(A)
+await(false)
