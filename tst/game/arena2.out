@@ -15,13 +15,13 @@
 52	unit.hit	vagrant 111.3
 98	unit.hit	vagrant 98.4
 102	unit.hit	vagrant 85.6
-122	unit.hit	vagrant 72.7
-125	unit.hit	vagrant 59.8
-161	unit.hit	vagrant 46.9
-190	unit.hit	vagrant 34.0
-208	unit.hit	vagrant 21.1
-320	unit.hit	vagrant 8.2
-348	enemy.die	seeker
-348	unit.hit	vagrant -4.7
-348	unit.die	vagrant
-348	died	1
+123	unit.hit	vagrant 72.7
+163	unit.hit	vagrant 59.8
+190	unit.hit	vagrant 46.9
+202	unit.hit	vagrant 34.0
+256	unit.hit	vagrant 21.1
+263	enemy.die	seeker
+263	unit.hit	vagrant 8.2
+553	unit.hit	vagrant -4.7
+553	unit.die	vagrant
+553	died	1

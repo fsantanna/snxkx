@@ -5,20 +5,20 @@
 0	add	Seeker 240.0 70.0
 0	add	Seeker 200.0 100.0
 0	add	Seeker 280.0 100.0
-126	enemy.die	exploder
+98	enemy.die	exploder
 163	enemy.die	headbutter
 163	unit.hit	vagrant 496.0
-188	enemy.die	seeker
-188	unit.hit	vagrant 478.7
-225	unit.hit	vagrant 457.3
-229	enemy.die	seeker
-229	unit.hit	vagrant 440.0
+182	enemy.die	seeker
+182	unit.hit	vagrant 478.7
+219	enemy.die	seeker
+227	unit.hit	vagrant 457.3
+232	unit.hit	vagrant 436.0
+255	unit.hit	cleric 460.5
 263	unit.hit	archer 384.1
-307	enemy.die	shooter
-307	unit.hit	vagrant 422.7
-433	enemy.die	speed_booster
-542	unit.hit	wizard 195.8
-543	unit.hit	swordsman 541.7
-647	enemy.die	speed_booster
-647	clear	6
-828	buy_screen
+302	enemy.die	shooter
+302	unit.hit	vagrant 418.7
+322	enemy.die	speed_booster
+482	enemy.die	speed_booster
+482	clear	6
+482	unit.hit	vagrant 397.3
+663	buy_screen

@@ -25,11 +25,23 @@ func lerp_angle_dt (f, dt, src, dst) {
 func hit (to, dmg, o) {
     emit @:global :Hit ([ to=to, dmg=dmg ] ++ (o || []))
 }
-func push (to, f, r) {
-    emit @:global :Push [ to=to, f=f, r=r ]
+func push (to, f, r, inv) {
+    emit @:global :Push [ to=to, f=f, r=r, inv=inv ]
 }
 func slow (amount, duration) {
     emit @:global :Slow [ amount=amount || 0.5, duration=duration || 0.5 ]
+}
+
+;; As `Seeker:slow(amount, duration)`: the enemy moves at `amount` of its
+;; speed for a while (a new slow restarts it).
+func slow_enemy (to, amount, duration) {
+    emit @:global :Slowed [ to=to, amount=amount, duration=duration ]
+}
+
+;; As `Seeker:apply_dot(dmg, duration, color)`: `dmg` over time, a
+;; quarter every 0.25s.
+func dot (to, dmg, duration, color) {
+    emit @:global :Dot [ to=to, dmg=dmg, duration=duration, color=color ]
 }
 
 ;; The slow motion of the original (`slow(amount, duration)` in

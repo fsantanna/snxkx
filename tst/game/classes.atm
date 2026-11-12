@@ -1,0 +1,40 @@
+;; The class levels of an arena, and the buffs of each unit from the
+;; classes and the characters (`Player:update`): computed by hand in the
+;; comments, from the formulas of the original.
+include "../../src/game.atm"
+spawn Background()
+spawn Camera()
+spawn SlowMotion()
+
+;; ranger 3 (archer x3), warrior 3 (squire, swordsman, outlaw), mage 3
+;; (wizard, magician x2), rogue 3 (scout x2, outlaw), explorer 1 (vagrant):
+;; 5 active sets.
+val run = [ level=7, loop=0, gold=3, units=[
+    ["vagrant", 3], ["squire", 3], ["swordsman", 3], ["outlaw", 3], ["archer", 1], ["archer", 1],
+    ["archer", 1], ["scout", 1], ["scout", 1], ["wizard", 1], ["magician", 1], ["magician", 1],
+] ]
+val A = new_arena(7)
+set A.run = run
+spawn Arena(A)
+loop _ in 3 {
+    await :clock
+}
+print("levels", A.cl.ranger, A.cl.warrior, A.cl.mage, A.cl.rogue, A.cl.explorer, A.cl.enchanter, "active", active_sets(A.units))
+;; vagrant: dmg 1.5 (squire) x 1.5 (vagrant) x 1.75 (explorer) = 3.9375,
+;;          aspd 1.3 x 1.5 x 1.75 = 3.4125
+;; swordsman: dmg 1.5 x 2 = 3, def_a 25; outlaw: aspd 1.3 x 1.5 = 1.95, crit 15
+;; archer: barrage 8; all: def_m 1.5, mvspd 1.3, knockback 1
+loop _, u in A.units {
+    print(u.character, string.format("dmg %.4f aspd %.4f def %.2f+%d mv %.2f", u.buff_dmg_m, u.buff_aspd_m, u.buff_def_m, u.buff_def_a, u.buff_mvspd_m),
+          u.chance_to_barrage, u.chance_to_crit, u.knockback_m, u.dot_dmg_m)
+}
+
+;; mage 1: the enemies have 15 less defense (25 - 15 = 10)
+loop on :clock {
+    until #A.enemies > 0
+}
+await :clock
+print("enemy def", (A.enemies@0).def)
+
+;; the rangers barrage, the rogues crit (see the trace)
+await(false)

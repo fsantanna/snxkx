@@ -11,21 +11,62 @@
 ;; here, a loop that awaits the cooldown, then a target, then acts.
 
 ;; As `Player:shoot(r, mods)`: projectiles along `r`, with a kick of the
-;; camera and of the unit. The outlaw throws five, in a fan.
+;; camera and of the unit. A rogue may crit, a ranger may barrage after
+;; the shot. The outlaw throws five, in a fan.
 task Shoot (A, u, r, mods, fx, shots) {
     spring_shake(2, r)
     spawn @fx HfxUse(u.shoot, 0.25)
+    var dmg_m = 1
+    var crit = false
+    if u.character == "beastmaster" {
+        set crit = rbool(10)
+    }
+    if u.chance_to_crit && rbool(u.chance_to_crit) {
+        set dmg_m = match u.assassination { 1 => 8 ; 2 => 10 ; 3 => 12 ; else => 4 }
+        set crit = true
+        trace("crit", u.character)
+    }
+    if u.assassination && has_class(u, "rogue") && !crit {
+        set dmg_m = 0.5
+    }
+    if u.character == "thief" {
+        set dmg_m = dmg_m*2
+        if (u.level == 3) && crit {
+            set dmg_m = dmg_m*10
+            set A.gold_picked_up += 1
+        }
+    }
+    val o = [ dmg=u.dmg*dmg_m, crit=crit ] ++ (mods || [])
     spawn @fx HitCircle(u.x + 0.8*9*math.cos(r), u.y + 0.8*9*math.sin(r), [rs=6])
     if u.character == "outlaw" {
         var a = r - 2*math.pi/8
         loop _ in 5 {
-            spawn @shots Projectile(A, shoot_args(u, a, mods), fx)
+            spawn @shots Projectile(A, shoot_args(u, a, o), fx)
             set a += math.pi/8
         }
     } else {
-        spawn @shots Projectile(A, shoot_args(u, r, mods), fx)
+        spawn @shots Projectile(A, shoot_args(u, r, o), fx)
     }
     shoot_sound(u.character)
+    if u.chance_to_barrage && rbool(u.chance_to_barrage) {
+        await Barrage(A, u, r, 3, [], fx, shots)
+    }
+}
+
+;; As `Player:barrage(r, n, pierce, ricochet, shoot_5, homing)`: `n`
+;; arrows, 0.075s apart, spread a little around `r`.
+task Barrage (A, u, r, n, o, fx, shots) {
+    trace("barrage", u.character)
+    loop i in (n || 8) {
+        if i > 0 {
+            await 75ms
+        }
+        play(archer1, [pitch=rfloat(0.95, 1.05), volume=(if o.shoot_5 => 0.2 => 0.35)])
+        spawn @fx HitCircle(u.x + 0.8*9*math.cos(r), u.y + 0.8*9*math.sin(r), [rs=6])
+        spawn @shots Projectile(A, [x=u.x + 1.6*9*math.cos(r), y=u.y + 1.6*9*math.sin(r), v=250,
+            r=r + rfloat(-math.pi/16, math.pi/16), color=u.color, dmg=u.dmg, parent=u, character="barrage",
+            level=u.level, pierce=o.pierce || 0, ricochet=o.ricochet || 0, shoot_5=o.shoot_5, homing=o.homing], fx)
+    }
 }
 
 ;; As `Player:attack(area, mods)`: an area at the unit, or at `x`, `y`.
@@ -240,18 +281,90 @@ task HealAt (A, x, y, fx) {
     }
 }
 
-;; The buffs of a unit from the others, recomputed in every tick, as the
-;; update of the original: the squire buffs all units.
+;; The buffs of a unit, recomputed in every tick, as `Player:update`
+;; (`player.lua:1147-1342`): each buff is a field of the unit, and the
+;; stats multiply them. The squire and the chronomancer set their fields
+;; on all units, and the fields stay when they die, as in the original.
+;; The class levels of the arena (`A.cl`) are counted when it starts; the
+;; vagrant and the explorer count the active sets of the living units.
 func unit_buffs (A, u) {
-    buffs_reset(u)
     loop _, o in A.units {
         if o.character == "squire" {
-            set u.buff_dmg_m = u.buff_dmg_m * (if o.level == 3 => 1.5 => 1.2)
-            set u.buff_def_m = u.buff_def_m * (if o.level == 3 => 1.5 => 1.2)
+            set u.squire_dmg_m = if o.level == 3 => 1.5 => 1.2
+            set u.squire_def_m = if o.level == 3 => 1.5 => 1.2
             if o.level == 3 {
-                set u.buff_aspd_m = u.buff_aspd_m * 1.3
-                set u.buff_mvspd_m = u.buff_mvspd_m * 1.3
+                set u.squire_aspd_m = 1.3
+                set u.squire_mvspd_m = 1.3
             }
         }
+        if o.character == "chronomancer" {
+            set u.chronomancer_aspd_m = 1.2
+        }
     }
+    val cl = A.cl
+    if (u.character == "vagrant") && (u.level == 3) {
+        val n = active_sets(A.units)
+        set u.vagrant_dmg_m = 1 + 0.1*n
+        set u.vagrant_aspd_m = 1 + 0.1*n
+    }
+    if (u.character == "swordsman") && (u.level == 3) {
+        set u.swordsman_dmg_m = 2
+    }
+    if (u.character == "outlaw") && (u.level == 3) {
+        set u.outlaw_aspd_m = 1.5
+    }
+    if has_class(u, "ranger") {
+        set u.chance_to_barrage = match cl.ranger { 2 => 16 ; 1 => 8 ; else => 0 }
+    }
+    if has_class(u, "warrior") {
+        set u.warrior_def_a = match cl.warrior { 2 => 50 ; 1 => 25 ; else => 0 }
+    }
+    set u.heal_effect_m = 1
+    if has_class(u, "nuker") {
+        set u.nuker_area_size_m = match cl.nuker { 2 => 1.25 ; 1 => 1.15 ; else => 1 }
+        set u.nuker_area_dmg_m = u.nuker_area_size_m
+    }
+    set u.conjurer_buff_m = match cl.conjurer { 2 => 1.5 ; 1 => 1.25 ; else => 1 }
+    if has_class(u, "rogue") {
+        set u.chance_to_crit = match cl.rogue { 2 => 30 ; 1 => 15 ; else => 0 }
+    }
+    set u.enchanter_dmg_m = match cl.enchanter { 2 => 1.25 ; 1 => 1.15 ; else => 1 }
+    if has_class(u, "explorer") {
+        val n = active_sets(A.units)
+        set u.explorer_dmg_m = 1 + 0.15*n
+        set u.explorer_aspd_m = 1 + 0.15*n
+    }
+    set u.knockback_m = match cl.forcer { 2 => 1.5 ; 1 => 1.25 ; else => 1 }
+    set u.dot_dmg_m = 1
+    if has_class(u, "voider") {
+        set u.dot_dmg_m = match cl.voider { 2 => 1.4 ; 1 => 1.2 ; else => 1 }
+    }
+    if (u.character == "flagellant") && (u.level == 3) {
+        set u.flagellant_hp_m = 2
+    }
+    val m = \(k) { u@(k) || 1 }
+    buffs_reset(u)
+    set u.buff_def_a = u.warrior_def_a || 0
+    set u.buff_aspd_m = m("chronomancer_aspd_m")*m("vagrant_aspd_m")*m("outlaw_aspd_m")*m("fairy_aspd_m")*
+        m("psyker_aspd_m")*m("chronomancy_aspd_m")*m("awakening_aspd_m")*m("berserking_aspd_m")*m("reinforce_aspd_m")*
+        m("squire_aspd_m")*m("speed_3_aspd_m")*m("last_stand_aspd_m")*m("enchanted_aspd_m")*m("explorer_aspd_m")*
+        m("magician_aspd_m")
+    set u.buff_dmg_m = m("squire_dmg_m")*m("vagrant_dmg_m")*m("enchanter_dmg_m")*m("swordsman_dmg_m")*
+        m("flagellant_dmg_m")*m("psyker_dmg_m")*m("ballista_dmg_m")*m("awakening_dmg_m")*m("reinforce_dmg_m")*
+        m("payback_dmg_m")*m("immolation_dmg_m")*m("damage_4_dmg_m")*m("offensive_stance_dmg_m")*m("last_stand_dmg_m")*
+        m("dividends_dmg_m")*m("explorer_dmg_m")
+    set u.buff_def_m = m("squire_def_m")*m("ouroboros_def_m")*m("unwavering_stance_def_m")*m("reinforce_def_m")*
+        m("defensive_stance_def_m")*m("last_stand_def_m")*m("unrelenting_stance_def_m")*m("hardening_def_m")
+    set u.buff_area_size_m = m("nuker_area_size_m")*m("magnify_area_size_m")*m("unleash_area_size_m")*m("last_stand_area_size_m")
+    set u.buff_area_dmg_m = m("nuker_area_dmg_m")*m("amplify_area_dmg_m")*m("unleash_area_dmg_m")*m("last_stand_area_dmg_m")
+    set u.buff_mvspd_m = m("wall_rider_mvspd_m")*m("centipede_mvspd_m")*m("squire_mvspd_m")*m("last_stand_mvspd_m")*m("haste_mvspd_m")
+    set u.buff_hp_m = m("flagellant_hp_m")
+}
+
+;; A buff for a while: a field of the unit, back to 1 at the end (as
+;; `t:after(d, function() u.field = 1 end)`).
+task TimedBuff (u, k, v, d) {
+    set u@(k) = v
+    await(d * 1s)
+    set u@(k) = 1
 }

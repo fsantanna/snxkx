@@ -7,46 +7,42 @@
 386	add	Seeker 92.0 123.0
 396	enemy.die	seeker
 396	unit.hit	vagrant 596.0
-477	enemy.die	seeker
-481	add	SpawnMarker 80.0 59.0
-487	add	SpawnMarker 400.0 211.0
-489	add	SpawnMarker 400.0 59.0
-491	add	SpawnMarker 240.0 135.0
-561	add	Seeker 68.0 47.0
-567	add	Seeker 388.0 199.0
-568	add	Seeker 388.0 47.0
-570	add	Seeker 228.0 123.0
-595	enemy.die	seeker
-702	enemy.die	seeker
-702	unit.hit	vagrant 596.0
-721	enemy.die	seeker
-744	enemy.die	seeker
-943	enemy.die	seeker
-943	wave	2
-973	add	SpawnMarker 80.0 135.0
-1053	add	Seeker 68.0 123.0
-1059	add	Seeker 92.0 123.0
-1065	add	Seeker 92.0 147.0
-1071	add	Seeker 68.0 147.0
-1077	add	Seeker 80.0 135.0
-1083	add	Seeker 68.0 123.0
-1089	add	Seeker 92.0 123.0
-1095	add	Seeker 92.0 147.0
-1101	add	Seeker 68.0 147.0
-1107	add	Seeker 80.0 135.0
-1213	enemy.die	seeker
-1222	enemy.die	seeker
-1229	enemy.die	seeker
-1234	enemy.die	seeker
-1258	enemy.die	seeker
-1258	unit.hit	vagrant 592.0
-1275	enemy.die	seeker
-1275	unit.hit	vagrant 596.0
-1280	enemy.die	seeker
-1280	unit.hit	vagrant 588.0
-1285	enemy.die	seeker
-1285	unit.hit	vagrant 584.0
-1324	enemy.die	seeker
-1337	enemy.die	seeker
-1337	clear	1
-1518	buy_screen	6	3	0
+428	enemy.die	seeker
+484	add	SpawnMarker 80.0 59.0
+486	add	SpawnMarker 400.0 59.0
+488	add	SpawnMarker 400.0 211.0
+491	add	SpawnMarker 80.0 211.0
+564	add	Seeker 68.0 47.0
+566	add	Seeker 388.0 47.0
+568	add	Seeker 388.0 199.0
+570	add	Seeker 68.0 199.0
+575	enemy.die	seeker
+656	enemy.die	seeker
+724	enemy.die	seeker
+800	enemy.die	seeker
+881	enemy.die	seeker
+881	wave	2
+911	add	SpawnMarker 400.0 135.0
+991	add	Seeker 388.0 123.0
+997	add	Seeker 412.0 123.0
+1003	add	Seeker 412.0 147.0
+1009	add	Seeker 388.0 147.0
+1015	add	Seeker 400.0 135.0
+1019	enemy.die	seeker
+1021	add	Seeker 388.0 123.0
+1027	add	Seeker 412.0 123.0
+1029	enemy.die	seeker
+1033	add	Seeker 412.0 147.0
+1038	enemy.die	seeker
+1047	enemy.die	seeker
+1047	unit.hit	vagrant 596.0
+1057	enemy.die	seeker
+1057	unit.hit	vagrant 592.0
+1064	enemy.die	seeker
+1064	unit.hit	vagrant 588.0
+1068	enemy.die	seeker
+1068	unit.hit	vagrant 584.0
+1074	enemy.die	seeker
+1074	clear	1
+1074	unit.hit	vagrant 580.0
+1255	buy_screen	6	3	0

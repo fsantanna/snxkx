@@ -57,7 +57,15 @@ task Seeker (A, e, fx, shots) {
     body_restitution(e.b, 0.5)
     val st = if e.boss => steerable(e.b, e.v, 1000, 2*math.pi, 2) => steerable(e.b, e.v, 2000, 4*math.pi, 4)
     set e.st = st
+    set e.stunned = false
     spawn SpeedBoosts(e)
+    spawn SeekerSlows(e)
+    pin dots = tasks()
+    spawn {
+        loop d on :Dot until it.to == e {
+            spawn @dots Dot(e, d.dmg, d.duration, d.color, fx)
+        }
+    }
     spawn {
         if e.boss {
             await BossAttack(A, e, fx)
@@ -106,10 +114,15 @@ task Seeker (A, e, fx, shots) {
         ;; the life of the seeker: until its hp ends
         loop h on :Hit until it.to == e {
             spawn @fxs HfxUse(e.hit, 0.25, 200, 10)
-            spawn @fxs ShowHp(e)
-            val dmg = math.max(unit_damage(e, h.dmg), 0)
-            set e.hp = math.min(e.hp - dmg, e.max_hp)
-            set A.damage_dealt += dmg
+            if !e.push_invulnerable {
+                spawn @fxs ShowHp(e)
+                var dmg = math.max(unit_damage(e, h.dmg)*(if e.stunned => 2 => 1), 0)
+                if e.vulnerable {
+                    set dmg = dmg*e.vulnerable
+                }
+                set e.hp = math.min(e.hp - dmg, e.max_hp)
+                set A.damage_dealt += dmg
+            }
             until e.hp <= 0
         }
     } with {
@@ -117,7 +130,8 @@ task Seeker (A, e, fx, shots) {
         loop on :clock {
             set e.x, e.y = body_pos(e.b)
             set e.r = body_angle(e.b)
-            set e.buff_mvspd_m = e.boost * (if e.elite == "tank" => 0.35 => 1)
+            set e.buff_def_a = match (A.cl && A.cl.mage) { 2 => -30 ; 1 => -15 ; else => 0 }
+            set e.buff_mvspd_m = e.boost * (e.slowed || 1) * (if e.elite == "tank" => 0.35 => 1)
             unit_stats(e, false, A.ng)
             set st.max_v = e.max_v
             if (e.boost > 1) && !e.elite && !e.boss {
@@ -181,6 +195,7 @@ task Seeker (A, e, fx, shots) {
             }
             ;; pushed: tumbling with no steering, pushed again or not
             loop {
+                set e.push_invulnerable = p.inv
                 seeker_push(e, p.f, p.r)
                 set p = par :any {
                     loop on :clock {
@@ -193,6 +208,7 @@ task Seeker (A, e, fx, shots) {
                 }
                 until p == nil
             }
+            set e.push_invulnerable = false
             body_set(e.b, :damping, 0)
             body_set(e.b, :angular_damping, 0)
         }
@@ -216,4 +232,36 @@ task Seeker (A, e, fx, shots) {
     }
     spawn @fx HitCircle(e.x, e.y, [rs=12, scale_down=true, duration=0.3, change_color=[0.5, e.color]])
     play(rtable([enemy_die1, enemy_die2]), [pitch=rfloat(0.9, 1.1), volume=0.5])
+}
+
+;; The slows of a seeker (`Seeker:slow`): `e.slowed` while a slow lasts,
+;; and a new slow restarts it, as the tagged timer of the original.
+task SeekerSlows (e) {
+    loop {
+        var s = await :Slowed until it.to == e
+        loop {
+            set e.slowed = s.amount
+            set s = par :any {
+                await(s.duration * 1s)
+                nil
+            } with {
+                await :Slowed until it.to == e
+            }
+            until !s
+        }
+        set e.slowed = nil
+    }
+}
+
+;; A damage over time on a seeker (`Seeker:apply_dot`): a quarter of `dmg`
+;; every 0.25s, `duration/0.2` times.
+task Dot (e, dmg, duration, color, fx) {
+    loop _ in math.floor(duration/0.2) {
+        await 250ms
+        play(hit2, [pitch=rfloat(0.8, 1.2), volume=0.2])
+        hit(e, dmg/4, [dot=true])
+        spawn @fx HitCircle(e.x, e.y, [rs=6, color=fg@0, duration=0.1])
+        spawn @fx HitParticle(e.x, e.y, [color=e.color])
+        spawn @fx HitParticle(e.x, e.y, [color=color || purple@0])
+    }
 }

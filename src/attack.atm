@@ -156,8 +156,9 @@ task Projectile (A, p, fx) {
         loop e on :trigger.enter until (it.b == p.b) && (it.other.kind == :enemy) {
             val o = e.other
             if (p.pierce <= 0) && (p.chain <= 0) {
-                hit(o, p.dmg, [projectile=p])
                 projectile_sound(p.character)
+                hit(o, p.dmg, [projectile=p])
+                spawn @fx ProjectileHit(p, o, fx)
                 break (p.x, p.y, rint(2, 3))
             }
             if p.pierce > 0 {
@@ -180,26 +181,41 @@ task Projectile (A, p, fx) {
             spawn @fx HitParticle(p.x, p.y, [color=o.color])
             projectile_sound(p.character)
             hit(o, p.dmg, [projectile=p])
+            spawn @fx ProjectileHit(p, o, fx)
         }
     } with {
         ;; dies on a wall, or bounces
         loop e on :collision.enter until (it.b == p.b) && (it.other.kind == :wall) {
+            val c = p.character
             ifs {
-                (p.character == "archer") && (p.ricochet > 0) => {
+                X.xin(c, ["archer", "hunter", "barrage", "barrager", "sentry"]) => {
+                    play(rtable([arrow_hit_wall1, arrow_hit_wall2]), [pitch=rfloat(0.9, 1.1), volume=0.2])
+                    if p.ricochet <= 0 {
+                        spawn @fx WallArrow(e.x, e.y, p.r, p.color)
+                        break (e.x, e.y, 0)
+                    }
                     bounce(p, e.nx, e.ny)
                     set p.ricochet -= 1
-                    play(rtable([arrow_hit_wall1, arrow_hit_wall2]), [pitch=rfloat(0.9, 1.1), volume=0.2])
                 }
-                p.character == "archer" => {
-                    play(rtable([arrow_hit_wall1, arrow_hit_wall2]), [pitch=rfloat(0.9, 1.1), volume=0.2])
-                    break (e.x, e.y, 0)
-                }
-                (p.character == "scout") || (p.character == "outlaw") => {
+                X.xin(c, ["scout", "outlaw", "blade", "spellblade", "jester", "beastmaster", "witch", "thief"]) => {
                     play(knife_hit_wall1, [pitch=rfloat(0.9, 1.1), volume=0.2])
+                    bounce(p, e.nx, e.ny)
+                    spawn @fx WallKnife(A, e.x, e.y, p.r, p.v*0.1, p.color, fx)
+                    if c == "spellblade" {
+                        play(magic_area1, [pitch=rfloat(0.95, 1.05), volume=0.075])
+                    }
                     break (e.x, e.y, 0)
                 }
-                p.character == "wizard" => {
+                X.xin(c, ["wizard", "lich", "arcanist", "arcanist_projectile", "witch"]) => {
                     play(magic_area1, [pitch=rfloat(0.95, 1.05), volume=0.075])
+                    break (e.x, e.y, rint(2, 3))
+                }
+                c == "cannoneer" => {
+                    play(cannon_hit_wall1, [pitch=rfloat(0.95, 1.05), volume=0.1])
+                    break (e.x, e.y, rint(2, 3))
+                }
+                X.xin(c, ["engineer", "dual_gunner", "miner"]) => {
+                    play(rtable([turret_hit_wall1, turret_hit_wall2]), [pitch=rfloat(0.9, 1.1), volume=0.2])
                     break (e.x, e.y, rint(2, 3))
                 }
                 else => {
@@ -217,6 +233,91 @@ task Projectile (A, p, fx) {
     if p.character == "wizard" {
         spawn @fx Area(A, [x=p.x, y=p.y, r=p.r, w=p.parent.area_size_m*24, color=p.color,
                            dmg=p.parent.area_dmg_m*p.dmg, character="wizard"], fx)
+    }
+}
+
+;; What follows a hit of a projectile on an enemy, after its damage
+;; (`Projectile:on_trigger_enter`, `player.lua:2403-2414`): a crit shakes
+;; the screen, and a projectile with `knockback` pushes.
+task ProjectileHit (p, o, fx) {
+    if p.crit {
+        shake(5, 0.25)
+        play(rogue_crit1, [pitch=rfloat(0.95, 1.05), volume=0.5])
+        play(rogue_crit2, [pitch=rfloat(0.95, 1.05), volume=0.15])
+        loop _ in 3 {
+            spawn @fx HitParticle(o.x, o.y, [color=p.color, v=rfloat(100, 400)])
+        }
+        loop _ in 3 {
+            spawn @fx HitParticle(o.x, o.y, [color=o.color, v=rfloat(100, 400)])
+        }
+        spawn @fx HitCircle(o.x, o.y, [rs=12, color=fg@0, duration=0.3, scale_down=true, change_color=[0.5, p.color]])
+    }
+    if p.knockback {
+        push(o, p.knockback*(p.knockback_m || 1), p.r)
+    }
+}
+
+;; As `WallArrow`: an arrow stuck in the wall, which blinks away after
+;; 0.8 to 2s.
+task WallArrow (x, y, r, color) {
+    val h = hfx(1)
+    spawn Springs(h.s)
+    spawn HfxUse(h, 0.25)
+    var shown = true
+    spawn {
+        loop on :draw {
+            if shown {
+                eng.push(x, y, r, h.s.x)
+                eng.rect(x, y, 10, 4, 2, 2, if h.f > 0 => fg@0 => color)
+                eng.pop()
+            }
+        }
+    }
+    await(rfloat(0.8, 2) * 1s)
+    loop i in 7 {
+        if i > 0 {
+            await 50ms
+        }
+        set shown = !shown
+    }
+}
+
+;; As `WallKnife`: a knife that bounces off the wall, spinning, slows down
+;; in 0.8 to 1.6s, and blinks away.
+task WallKnife (A, x, y, r, v, color, fx) {
+    val k = [ kind=:knife, w=10, h=4, x=x, y=y, r=r, v=v, vr=r ]
+    body(A.w, k, :dynamic, x, y, :projectile, [:rect, 10, 4])
+    defer {
+        body_free(A.w, k.b)
+    }
+    val h = hfx(1)
+    spawn Springs(h.s)
+    spawn HfxUse(h, 0.25)
+    val dvr = rtable([rfloat(-8*math.pi, -4*math.pi), rfloat(4*math.pi, 8*math.pi)])
+    var shown = true
+    spawn {
+        loop on :draw {
+            if shown {
+                eng.push(k.x, k.y, k.vr, h.s.x)
+                eng.rect(k.x, k.y, 10, 4, 2, 2, if h.f > 0 => fg@0 => color)
+                eng.pop()
+            }
+        }
+    }
+    spawn {
+        loop us on :clock {
+            set k.x, k.y = body_pos(k.b)
+            body_set(k.b, :angle, k.r)
+            body_set(k.b, :velocity, k.v*math.cos(k.r), k.v*math.sin(k.r))
+            set k.vr += dvr*(us / 1000000)
+        }
+    }
+    await Tween(rfloat(0.8, 1.6), k, [v=0], linear)
+    loop i in 7 {
+        if i > 0 {
+            await 50ms
+        }
+        set shown = !shown
     }
 }
 

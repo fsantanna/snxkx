@@ -61,3 +61,20 @@ func classes_of (units) {
     }
     out
 }
+
+;; The number of classes whose first set the units reach, as the vagrant
+;; of level 3 and the explorer count them (`player.lua:1170-1188`).
+func active_sets (units) {
+    var n = 0
+    loop _, l in class_levels(units) {
+        if l >= 1 {
+            set n += 1
+        }
+    }
+    n
+}
+
+;; Whether a unit is of a class.
+func has_class (u, c) {
+    X.xin(c, character_classes@(unit_character(u)) || [])
+}

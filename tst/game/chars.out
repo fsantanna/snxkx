@@ -16,23 +16,26 @@
 387	enemy.die	seeker
 387	enemy.die	seeker
 393	wave	2
-423	add	SpawnMarker 240.0 135.0
-503	add	Seeker 228.0 123.0
-506	enemy.die	seeker
-509	add	Seeker 252.0 123.0
-515	add	Seeker 252.0 147.0
-521	add	Seeker 228.0 147.0
-522	enemy.die	seeker
-522	unit.hit	vagrant 142.2
-527	add	Seeker 240.0 135.0
-528	enemy.die	seeker
-528	enemy.die	seeker
-528	enemy.die	seeker
-533	add	Seeker 228.0 123.0
-538	enemy.die	seeker
-539	add	Seeker 252.0 123.0
-543	enemy.die	seeker
-557	add	Seeker 240.0 135.0
-588	enemy.die	seeker
-588	clear	1
-769	buy_screen	6
+423	add	SpawnMarker 80.0 135.0
+503	add	Seeker 68.0 123.0
+504	enemy.die	seeker
+509	add	Seeker 92.0 123.0
+515	add	Seeker 92.0 147.0
+521	add	Seeker 68.0 147.0
+523	enemy.die	seeker
+523	enemy.die	seeker
+523	enemy.die	seeker
+527	add	Seeker 80.0 135.0
+533	add	Seeker 68.0 123.0
+539	add	Seeker 92.0 123.0
+545	add	Seeker 92.0 147.0
+551	add	Seeker 68.0 147.0
+557	add	Seeker 80.0 135.0
+773	enemy.die	seeker
+793	enemy.die	seeker
+793	enemy.die	seeker
+793	enemy.die	seeker
+793	enemy.die	seeker
+793	enemy.die	seeker
+793	clear	1
+974	buy_screen	6
