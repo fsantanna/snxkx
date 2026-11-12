@@ -168,7 +168,7 @@ task Projectile (A, p, fx) {
                 set hit_list@+ = o
                 val t = random_enemy(A, p.x, p.y, 48, hit_list)
                 if t {
-                    set p.r = cmath.atan2(t.y - p.y, t.x - p.x)
+                    set p.r = math.atan2(t.y - p.y, t.x - p.x)
                     set p.v = p.v*1.25
                     if (p.level == 3) && (p.character == "scout") {
                         set p.dmg = p.dmg*1.25

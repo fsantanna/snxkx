@@ -17,4 +17,3 @@ spawn Arena(A, [
 ])
 val e = await :goto
 print(eng.tick(), e.screen)
-await 1s        ;; (doc/compiler.md, 5)

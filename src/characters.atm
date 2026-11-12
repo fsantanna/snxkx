@@ -95,7 +95,7 @@ task HealingOrb (A, x, y, fx) {
                 }
             }
             if n > 0 {
-                val a = cmath.atan2(sy/n - o.y, sx/n - o.x)
+                val a = math.atan2(sy/n - o.y, sx/n - o.x)
                 body_set(o.b, :force, 20*math.cos(a), 20*math.sin(a))
             }
         }
@@ -174,7 +174,7 @@ task Sentry (A, u, fx, shots) {
 ;; The behavior of a unit by its character, while the unit lives.
 task Character (A, u, fx, shots) {
     val near = \(rs) { #enemies_in_circle(A, u.x, u.y, rs) > 0 }
-    val toward = \(e) { cmath.atan2(e.y - u.y, e.x - u.x) }
+    val toward = \(e) { math.atan2(e.y - u.y, e.x - u.x) }
     match u.character {
         "vagrant" => loop {
             await Cooldown(u, 2, \{ near(96) })

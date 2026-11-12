@@ -92,7 +92,7 @@ func bounce (u, nx, ny) {
 
 ;; The angle from a unit to a point.
 func angle_to (u, x, y) {
-    cmath.atan2(y - u.y, x - u.x)
+    math.atan2(y - u.y, x - u.x)
 }
 
 ;; A unit of the snake. `u` has `character` and `level`, and `x`, `y`,
@@ -181,7 +181,7 @@ task Unit (A, u, fx, shots) {
             if u.chp {
                 spawn HfxUse(u.chp, 0.5)
             }
-            val dmg = math.max(unit_damage(u, e.dmg), 0)
+            val dmg = if STRESS => 0 => math.max(unit_damage(u, e.dmg), 0)
             set u.hp -= dmg
             play(rtable([player_hit1, player_hit2]), [pitch=rfloat(0.95, 1.05), volume=0.5])
             shake(4, 0.5)

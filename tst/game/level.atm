@@ -14,4 +14,3 @@ set A.run = run
 spawn Arena(A)
 val e = await :goto
 print(eng.tick(), e.screen, run.gold, A.gold_gained, A.interest)
-await 1s        ;; (doc/compiler.md, 5)

@@ -225,7 +225,7 @@ task EliteAttack (A, e, fx, shots) {
                 set e.headbutting = true
                 body_set(e.b, :damping, 0)
                 val l = A.units@0
-                val a = if l => cmath.atan2(l.y - e.y, l.x - e.x) => e.r
+                val a = if l => math.atan2(l.y - e.y, l.x - e.x) => e.r
                 ;; the next one is 10s (of real time, as `love.timer.getTime`)
                 ;; after the start of this one
                 par :all {
