@@ -25,8 +25,9 @@ tst/run.sh          # the tests, with no screen
 ## Status
 
 Work in progress: the menu, the shop, the levels with their waves,
-elites and bosses, and ten of the characters; not yet the passives, the
-items, the other characters and enemies, the options, or the save.
+elites and bosses, all characters and classes, and the passives with
+their items; not yet the other enemies, the loops after level 25, the
+options, or the save.
 
 - `doc/study.md`: the original and the port, side by side, behavior by
   behavior.
