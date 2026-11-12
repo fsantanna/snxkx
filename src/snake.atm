@@ -181,8 +181,22 @@ task Unit (A, u, fx, shots) {
     spawn {
         loop on :draw {
             eng.push(u.x, u.y, u.r, u.hit.s.x*u.shoot.s.x)
-            eng.rect(u.x, u.y, 9, 9, 3, 3,
-                     if (u.hit.f > 0) || (u.shoot.f > 0) => fg@0 => u.color)
+            if u.undead {
+                eng.rect(u.x, u.y, 9, 9, 3, 3, u.color, 1)
+            } else {
+                eng.rect(u.x, u.y, 9, 9, 3, 3,
+                         if (u.hit.f > 0) || (u.shoot.f > 0) => fg@0 => u.color)
+            }
+            ;; the halos: ouroboros (yellow), divined (green), the fairy (blue)
+            if (u.ouroboros_def_m || 1) > 1 {
+                eng.rect(u.x, u.y, 1.25*9, 1.25*9, 3, 3, alpha(yellow@0, 0.5))
+            }
+            if u.divined {
+                eng.rect(u.x, u.y, 1.25*9, 1.25*9, 3, 3, alpha(green@0, 0.5))
+            }
+            if (u.fairy_aspd_m || 1) > 1 {
+                eng.rect(u.x, u.y, 1.25*9, 1.25*9, 3, 3, alpha(blue@0, 0.5))
+            }
             eng.pop()
             draw_hp_bar(u, 9, 9, green@0)
         }
