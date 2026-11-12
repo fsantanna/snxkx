@@ -59,6 +59,9 @@ func state_load () {
 }
 
 func run_save (run) {
+    if !SAVE_DIR {
+        return nil
+    }
     val ls = [
         "level " ++ tostring(run.level),
         "loop " ++ tostring(run.loop),
@@ -79,7 +82,7 @@ func run_save (run) {
     loop _, p in run.passives {
         set ls@+ = "passive " ++ p.passive ++ " " ++ tostring(p.level) ++ " " ++ tostring(p.xp)
     }
-    set ls@+ = "pool " ++ vector.join(run.pool, " ")
+    set ls@+ = "pool " ++ vector.join(run.pool || [], " ")
     save_lines("run.txt", ls)
 }
 

@@ -1,6 +1,6 @@
-==> ERROR:
- |  tst/game/../../src/shop.atm:631 (call)
- |  tst/game/../../src/save.atm:82 (call)
- v  tst/game/../../src/save.atm:82 (throw)
-==> invalid argument to 'join' : expected table : got nil
-(exit 1)
+click	60.0	75.0	gold	3	units	0
+click	140.0	75.0	gold	1	units	1
+click	150.0	18.0	gold	1	units	1
+click	390.0	250.0	gold	1	units	1
+goto	arena	[wavy, bg]level 1/25
+chronomancer	1	0	0

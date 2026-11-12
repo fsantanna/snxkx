@@ -41,6 +41,11 @@ for t in tst/*.atm tst/*/*.atm; do
         timeout -k 10 "${TST_TIMEOUT:-600}" "$ATMOS" "$t" || echo "(exit $?)"
     ) > "$OUT/$n.got" 2>&1 < /dev/null
     if [ "$UPDATE" = 1 ]; then
+        if grep -q "==> ERROR" "$OUT/$n.got"; then
+            echo "ERROR $n (not saved)"
+            fail=1
+            continue
+        fi
         cp "$OUT/$n.got" "$base.out"
         for p in "$OUT/$n".png "$OUT/$n".*.png; do
             [ -f "$p" ] && cp "$p" tst/shots/
