@@ -1,0 +1,124 @@
+;; Units of the arena: the stats of `Unit:calculate_stats` and the
+;; damage of `Unit:calculate_damage` (`objects.lua`).
+;;
+;; A unit is a record. The buffs of the original are fields of the record
+;; (`buff_dmg_m`, ...), set by whoever buffs it, which `unit_stats` reads.
+
+;; The table of the seekers by level, as the original builds it.
+val SEEKER_Y = do {
+    val y = [0, 1, 3, 3, 4, 6, 5, 6, 9, 7, 8, 12, 10, 11, 15, 12, 13, 18, 16, 17, 21, 17, 20, 24, 25]
+    val t = []
+    loop i in (1, 25) {
+        set t@(i) = y@(i-1)
+    }
+    var k = 1.07
+    loop i in (26, 200) {
+        val n = i % 25
+        if n == 0 {
+            set k += 0.07
+        }
+        set t@(i) = t@(i-10)*k
+    }
+    t
+}
+
+val BOSS_Y = do {
+    val y  = [0, 0, 3, 0, 0, 6, 0, 0, 9, 0, 0, 12, 0, 0, 18, 0, 0, 40, 0, 0, 32, 0, 0, 64, 90]
+    val y2 = [0, 0, 24, 0, 0, 28, 0, 0, 32, 0, 0, 36, 0, 0, 44, 0, 0, 64, 0, 0, 48, 0, 0, 80, 100]
+    val t = []
+    loop i in (1, 25) {
+        set t@(i) = y@(i-1)
+    }
+    loop i in (26, 50) {
+        set t@(i) = y2@(i-26)
+    }
+    var k = 1.07
+    loop i in (51, 200) {
+        var n = i % 25
+        if n == 0 {
+            set n = 25
+            set k += 0.07
+        }
+        set t@(i) = y2@(n-1)*k
+    }
+    t
+}
+
+;; The base stats of a unit, by `stats` (or `kind`): :player, :seeker, :boss.
+func base_stats (u, ng) {
+    val x = u.level
+    match u.stats || u.kind {
+        :player => [ hp=100*math.pow(2, x-1), dmg=10*math.pow(2, x-1), mvspd=75 ]
+        :boss => do {
+            val y = BOSS_Y@(x)
+            val s = [
+                hp    = 100 + ng*5 + (90 + ng*10)*y,
+                dmg   = (12 + ng*2) + (2 + ng)*y,
+                mvspd = math.min(35 + 1.5*y, 35 + 1.5*BOSS_Y@(150)),
+            ]
+            if x % 25 == 0 {
+                set s.dmg = if ng == 0 =>
+                    ((12 + ng*2) + (1.25 + ng)*y) =>
+                    ((12 + ng*2) + (1.75 + 0.5*ng)*y)
+                set s.mvspd = if ng == 0 =>
+                    math.min(35 + 1.1*y, 35 + 1.1*BOSS_Y@(150)) =>
+                    math.min(35 + 1.2*y, 35 + 1.2*BOSS_Y@(150))
+            }
+            s
+        }
+        :seeker => do {
+            val y = SEEKER_Y@(x)
+            if ng == 0 {
+                [ hp=25 + 16.5*y, dmg=4.5 + 2.5*y, mvspd=math.min(70 + 3*y, 70 + 3*SEEKER_Y@(150)) ]
+            } else {
+                [ hp=22 + ng*3 + (15 + ng*2.7)*y, dmg=(4 + ng*1.15) + (2 + ng*0.83)*y,
+                  mvspd=math.min(70 + 3*y, 70 + 3*SEEKER_Y@(150)) ]
+            }
+        }
+    }
+}
+
+;; The buffs of a unit, all neutral.
+func buffs_reset (u) {
+    set u.buff_hp_a = 0
+    set u.buff_dmg_a = 0
+    set u.buff_def_a = 0
+    set u.buff_mvspd_a = 0
+    set u.buff_hp_m = 1
+    set u.buff_dmg_m = 1
+    set u.buff_aspd_m = 1
+    set u.buff_area_dmg_m = 1
+    set u.buff_area_size_m = 1
+    set u.buff_def_m = 1
+    set u.buff_mvspd_m = 1
+}
+
+;; As `Unit:calculate_stats(first_run)`. `ng` is the new game plus.
+func unit_stats (u, first, ng) {
+    val b = base_stats(u, ng || 0)
+    if first {
+        buffs_reset(u)
+    }
+    val m = [hp=1, dmg=1, aspd=1, area_dmg=1, area_size=1, def=1, mvspd=1]
+    loop _, c in u.classes {
+        loop k, v in class_stat_multipliers@(c) {
+            set m@(k) = m@(k) * v
+        }
+    }
+    set u.max_hp = (b.hp + u.buff_hp_a)*m.hp*u.buff_hp_m
+    if first {
+        set u.hp = u.max_hp
+    }
+    set u.dmg = (b.dmg + u.buff_dmg_a)*m.dmg*u.buff_dmg_m
+    set u.aspd_m = 1/(1*m.aspd*u.buff_aspd_m)
+    set u.area_dmg_m = 1*m.area_dmg*u.buff_area_dmg_m
+    set u.area_size_m = 1*m.area_size*u.buff_area_size_m
+    set u.def = (25 + u.buff_def_a)*m.def*u.buff_def_m
+    set u.max_v = (b.mvspd + u.buff_mvspd_a)*m.mvspd*u.buff_mvspd_m
+    set u.v = u.max_v
+}
+
+;; As `Unit:calculate_damage(dmg)`: the damage after the defense.
+func unit_damage (u, dmg) {
+    if u.def >= 0 => dmg*(100/(100 + u.def)) => dmg*(2 - 100/(100 + u.def))
+}
