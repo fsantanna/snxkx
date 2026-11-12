@@ -1,0 +1,8 @@
+;; The state that outlives a run, as `state` of the original (`main.lua`,
+;; saved by `system.save_state`): the new game plus reached and the one in
+;; play, and the options.
+val STATE = [
+    ng_max = 0,         ;; new_game_plus
+    ng = 0,             ;; current_new_game_plus
+    dark_transitions = false,
+]

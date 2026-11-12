@@ -304,6 +304,15 @@ task SlowDown (dur) {
 task Clear (A, ui) {
     trace("clear", tostring(A.level))
     gain_gold(A)
+    ;; the last level of a loop: the game is won
+    if (A.level % 25) == 0 {
+        do {
+            pin sd = tasks()
+            spawn @sd SlowDown(1)
+            await Won(A, ui)
+        }
+        await ClearGo(A)
+    }
     spawn {
         await WaitReal(2)
         await SlowDown(0.7)
@@ -322,6 +331,62 @@ task Clear (A, ui) {
     }
     await ChoosePassive(A, ui)
     await ClearGo(A)
+}
+
+;; The end of the last level of a loop, as the branch of `Arena:quit` for
+;; `level % 25 == 0`: the new game plus goes up, the screen says so, and
+;; the run either loops (harder) or starts again (`Arena:endless`). The
+;; buttons that open pages on the web are left out.
+task Won (A, ui) {
+    trace("won", tostring(A.level))
+    if STATE.ng == STATE.ng_max {
+        set STATE.ng_max += 1
+    }
+    set STATE.ng += 1
+    spawn @ui Modal()
+    spawn @ui TweenReal(4, CAM, [x=W/2, y=H/2, r=0], linear)
+    val t = text([ [text="[wavy_mid, cbyc2]congratulations!", font=fat_font, alignment=:center] ])
+    spawn @ui Text2(W/2 + 40, H/2 - 69, t)
+    spawn @ui Cbyc(t, :cbyc2)
+    await WaitReal(2.5)
+    spawn @ui Text2(40, 20, text([ [text="[wavy_mid, fg]your build", font=pixul_font, alignment=:center] ]))
+    loop i, u in A.run.units {
+        val c = unit_character(u)
+        spawn @ui Text2(20 + 14 + text_width(pixul_font, c)/2, 40 + i*19,
+                        text([ [text="[" ++ character_color_strings@(c) ++ "]" ++ c, font=pixul_font, alignment=:left] ]))
+    }
+    val last = STATE.ng == 6
+    if last {
+        ;; the fifth new game plus is the last one
+        if STATE.ng == STATE.ng_max {
+            set STATE.ng_max = 5
+        }
+        set STATE.ng = 5
+        spawn @ui Text2(W/2 + 40, H/2 + 20, text([
+            [text="[fg]now you've really beaten the game!", font=pixul_font, alignment=:center, height_multiplier=1.24],
+            [text="[fg]thanks a lot for playing it and completing it entirely!", font=pixul_font, alignment=:center, height_multiplier=1.24],
+            [text="[wavy_mid, yellow]thanks for playing!", font=pixul_font, alignment=:center] ]))
+        spawn @ui Text2(W - 144, H - 20, text([ [text="[bg10]continue run (+difficulty):", font=pixul_font, alignment=:center] ]))
+        spawn @ui Button(task, :loop, W - 39, H - 20, "  loop  ")
+    } else {
+        spawn @ui Text2(W/2 + 40, H/2 + 5, text([
+            [text="[fg]you've beaten the game!", font=pixul_font, alignment=:center, height_multiplier=1.24],
+            [text="[wavy_mid, yellow]thanks for playing!", font=pixul_font, alignment=:center] ]))
+        spawn @ui Text2(W - 200, H - 44, text([ [text="[bg10]continue run (+difficulty, +1 max snake size):", font=pixul_font, alignment=:center] ]))
+        spawn @ui Text2(W - 187, H - 20, text([ [text="[bg10]new run (+difficulty, +1 max snake size):", font=pixul_font, alignment=:center] ]))
+        spawn @ui Button(task, :loop, W - 40, H - 44, "  loop  ")
+        spawn @ui Button(task, :restart, W - 40, H - 20, "restart")
+    }
+    val e = await :Button.click until X.xin(it.id, [:loop, :restart])
+    play(ui_switch2, [pitch=rfloat(0.95, 1.05), volume=0.5])
+    if e.id == :restart {
+        play(ui_transition2, [pitch=rfloat(0.95, 1.05), volume=0.5])
+        emit @:global :goto [ screen=:restart, x=W/2, y=H/2, color=fg@0, text="[wavy, bg]restarting..." ]
+        await(false)
+    }
+    ;; loop: the same run, one loop further, at the new game plus before
+    set STATE.ng = if STATE.ng >= 5 => 5 => math.max(STATE.ng - 1, 0)
+    set A.run.loop += 1
 }
 
 ;; The transition from a level that is clear to the shop.

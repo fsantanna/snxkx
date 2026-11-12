@@ -8,7 +8,7 @@
 
 func new_arena (level, menu) {
     [
-        level = level || 1, ng = 0, menu = menu,
+        level = level || 1, ng = STATE.ng, menu = menu,
         units = [], enemies = [], critters = [], turrets = [], path = [], time = 0, orbs = 0, golds = 0,
         x1 = W/2 - 0.8*W/2, y1 = H/2 - 0.8*H/2,
         x2 = W/2 + 0.8*W/2, y2 = H/2 + 0.8*H/2,

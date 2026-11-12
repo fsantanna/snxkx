@@ -1,0 +1,15 @@
+;; The end of level 25: the game is won, the new game plus goes up, and
+;; "loop" continues the run at level 26.
+include "../../src/game.atm"
+spawn Background()
+spawn Camera()
+spawn SlowMotion()
+spawn Input()
+
+val run = [ level=25, loop=0, gold=10, units=[ [character="vagrant", level=3, reserve=[0, 0]] ],
+            passives=[], pool=passive_pool(), shop_level=1, shop_xp=0 ]
+val A = new_arena(25)
+set A.run = run
+spawn Arena(A, [ [100, 100, 1] ])
+val e = await :goto
+print(eng.tick(), e.screen, "loop", run.loop, "ng", STATE.ng, STATE.ng_max)

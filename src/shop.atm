@@ -23,7 +23,7 @@ val CLASS_IMAGES = do {
 }
 
 func max_units (run) {
-    math.max(7, math.min(7 + (run.ng || 0) + run.loop, 12))
+    math.max(7, math.min(7 + STATE.ng + run.loop, 12))
 }
 
 ;; The experience of each level of the shop.
