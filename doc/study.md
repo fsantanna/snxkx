@@ -511,3 +511,180 @@ after the screens, and a transition outlives the screen it covers.
 Measured with the trace of both programs (`tst/game/menu.out` and
 `tst/original/run1.txt`): with a click at tick 62, the shop starts at
 tick 113 in both.
+
+---
+
+## 7. Snake units: state management
+
+The snake is a leader and its followers. When a unit dies, the units
+behind it move up, and if it was the leader, the next unit leads.
+
+### Lua + LÖVE
+
+A unit carries its role and its links in fields: `leader`, `followers`,
+`parent`, `follower_index`, and `dead`. Its update branches on the role
+in every tick (`player.lua:1352-1426`), and a dead unit repairs the
+links of the others (`player.lua:1754-1781`):
+
+```lua
+function Player:recalculate_followers()
+  if self.dead then
+    local new_leader = table.remove(self.followers, 1)
+    new_leader.leader = true
+    new_leader.previous_positions = {}
+    new_leader.followers = self.followers
+    new_leader.t:every(0.01, function()
+      table.insert(new_leader.previous_positions, 1, {x = new_leader.x, y = new_leader.y, r = new_leader.r})
+      ...
+    end)
+    main.current.player = new_leader
+    for i, follower in ipairs(self.followers) do
+      follower.parent = new_leader
+      follower.follower_index = i
+    end
+  else
+    ...
+  end
+end
+```
+
+A follower also has `following`, false until it first reaches its place
+on the path, when it plays a sound and some particles
+(`player.lua:1415-1421`).
+
+### Atmos
+
+A unit is a task (`src/snake.atm:117`). A follower runs the code of a
+follower until it is promoted, and then the code of the leader, below
+it (`src/snake.atm:175-206`):
+
+```
+;; a follower, until the units ahead of it die
+if A.units@0 != u {
+    par :any {
+        ;; first, until there is a place for it on the path
+        loop on :clock {
+            ...
+            until snake_place(A, u)
+        }
+        play(spawn1, [pitch=rfloat(0.8, 1.2), volume=0.15])
+        ...
+        ;; then along the path of the leader
+        loop on :clock {
+            ...
+        }
+    } with {
+        await :Snake.lead until it.u == u
+    }
+}
+;; the leader
+par {
+    loop us on :clock {
+        ...
+    }
+} with {
+    ;; the walls: it bounces, and the followers feel it in turn
+    loop e on :collision.enter until (it.b == u.b) && (it.other.kind == :wall) {
+        ...
+    }
+}
+```
+
+The units are records in one vector, in order (`A.units`). A dying unit
+leaves it, and if it was the first, emits `:Snake.lead` to the next one
+(`src/snake.atm`, `snake_remove`).
+
+### Analysis
+
+`leader` was a flag read in every tick to choose between two blocks of
+code, and written once, by another unit. In the port, the two blocks are
+two phases of the task, in sequence: a unit that reaches the code of the
+leader stays there, and nothing tests its role again. The bounce on the
+walls, which only the leader does, lives in the phase of the leader too,
+so it needs no test either.
+
+`following` was a flag for something that happens once; in the port it
+is the step before the loop. `dead` is the end of the task, which also
+ends its drawing, its contacts, and its effects.
+
+What remains is the order of the snake, a vector of records, because the
+followers need the leader's path and their place in it. The original
+keeps the same in three fields per unit (`followers`, `parent`,
+`follower_index`), rewritten on every death.
+
+The student's port made each unit adjust its own index when a unit of
+its pool ends. Here the vector is rewritten by the dying unit, as in
+the original, since the vector is also what the leader averages for the
+speed of the snake.
+
+---
+
+## 8. Snake units: status signalling
+
+A hit flashes a unit white for a moment, and shows its bar of hp for
+two seconds; a new hit restarts both.
+
+### Lua + LÖVE
+
+Both are a field and a timer with a tag, so that a new timer replaces
+the running one (`engine/game/flashes.lua` and `objects.lua:198-203`):
+
+```lua
+self[name] = {f = false, default_duration = default_duration or 0.15, flash = function(_, duration)
+  self[name].f = true
+  self.trigger:after(duration or self[name].default_duration, function() self[name].f = false end, name)
+end}
+```
+
+```lua
+function Unit:show_hp(n)
+  self.hp_bar.hidden = false
+  self.hp_bar.color = red[0]
+  self.t:after(n or 2, function() self.hp_bar.hidden = true end, 'hp_bar')
+end
+```
+
+The drawing reads the fields (`self.hfx.hit.f and fg[0] or self.color`,
+`if self.hidden then return end`).
+
+### Atmos
+
+Both are tasks that count themselves while they run (`src/fx.atm` and
+`src/snake.atm`):
+
+```
+task HfxUse (h, x, k, d, dur) {
+    spring_pull(h.s, x, k, d)
+    set h.f += 1
+    defer {
+        set h.f -= 1
+    }
+    await((dur || 0.15) * 1s)
+}
+```
+
+```
+task ShowHp (u, n) {
+    set u.hp_shown += 1
+    defer {
+        set u.hp_shown -= 1
+    }
+    await((n || 2) * 1s)
+}
+```
+
+and a hit spawns them: `spawn HfxUse(u.hit, 0.25, 200, 10)` and
+`spawn ShowHp(u)`.
+
+### Analysis
+
+The effect is a duration, which a task expresses directly: it starts,
+waits, and ends, and the `defer` undoes it even if the unit dies first.
+To restart it, the original cancels a timer by its name; the port runs
+another task, and the effect lasts while any of them runs, which ends at
+the same moment as the restarted timer (the last one started is the last
+to end).
+
+The counter is still a variable that the drawing reads. It is not a
+flag set in one place and cleared in another, though: each task
+increments and decrements it around its own wait.
