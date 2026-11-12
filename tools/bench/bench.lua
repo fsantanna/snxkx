@@ -10,6 +10,7 @@
 --   SNKRX_SHOT=f:file,..    saves the screen at tick f
 --   SNKRX_TRACE=file        writes the trace there (default stdout)
 --   SNKRX_TRACE_RANDOM=1    also traces the calls to the generator
+--   SNKRX_DUMP=file         dumps the data of the game (see dump.lua), quits
 --
 -- Time is simulated: every loop runs exactly one tick, and
 -- `love.timer.getTime` returns ticks * 1/60, so that runs repeat.
@@ -191,6 +192,10 @@ function bench.frame ()
         love.event.push(p[2] == "dn" and "keypressed" or "keyreleased", k)
       end
     end
+  end
+  if tick == 2 and os.getenv("SNKRX_DUMP") then
+    require("dump")(os.getenv("SNKRX_DUMP"))
+    love.event.quit(0)
   end
   if tick == last then
     bench.trace("end")

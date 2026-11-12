@@ -12,7 +12,7 @@ ROOT=$(pwd)
 if ! grep -q SNKRX_BENCH ext/SNKRX/main.lua; then
     (cd ext/SNKRX && git apply "$ROOT/tools/bench/original.patch")
 fi
-cp tools/bench/bench.lua ext/SNKRX/bench.lua
+cp tools/bench/bench.lua tools/bench/dump.lua ext/SNKRX/
 mkdir -p build
 
 export SNKRX_BENCH=1
