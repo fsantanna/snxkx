@@ -134,6 +134,7 @@ task Arena (A, enemies) {
     set A.cl = class_levels(A.run.units)
     loop i, c in A.run.units {
         val u = [ character=unit_character(c), level=unit_level(c), index=i, chp=hfx(1) ]
+        unit_passives(u, A.run.passives)
         if i == 0 {
             set u.x = A.start && A.start.x || (W/2)
             set u.y = A.start && A.start.y || (H/2 + 16)

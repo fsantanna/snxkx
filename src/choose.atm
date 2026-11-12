@@ -1,0 +1,142 @@
+;; The choice of a passive after every third level (`Arena:set_passives`
+;; and `PassiveCard`, `arena.lua:679-756`, `buy_screen.lua:1360-1420`).
+
+;; A card of a passive to choose (`PassiveCard`): its name and its icon. A
+;; click (or its number) emits `:Passive.pick [i]` to the screen.
+task PassiveCard (screen, i, x, y, passive) {
+    val s = spring(1)
+    spring_pull(s, 0.2, 200, 10)
+    spawn UISprings(s)
+    val name = text([ [text="[fg, wavy_mid]" ++ passive_names@(passive), font=pixul_font, alignment=:center] ])
+    spawn {
+        loop on :draw {
+            eng.push(x, y, 0, s.x)
+            text_draw(name, x, y - 20)
+            draw_image(PASSIVE_IMAGES@(passive), x, y + 24, 0, 1, 1, fg@0)
+            eng.pop()
+        }
+    }
+    val inside = func () {
+        val mx, my = eng.mouse()
+        (mx >= x - 35) && (mx <= x + 35) && (my >= y - 50) && (my <= y + 50)
+    }
+    par :any {
+        loop {
+            if !inside() {
+                await :mouse.mv until inside()
+            }
+            play(ui_hover1, [pitch=rfloat(1.3, 1.5), volume=0.5])
+            spring_pull(s, 0.2, 200, 10)
+            par :any {
+                await :mouse.mv until !inside()
+            } with {
+                loop on :mouse.dn until it.but == 1 {
+                    emit @screen :Passive.pick [ i=i ]
+                }
+            }
+        }
+    } with {
+        loop on :key.dn until it.name == tostring(i + 1) {
+            emit @screen :Passive.pick [ i=i ]
+        }
+    }
+}
+
+;; The choice of a passive after a level that is clear: four cards from
+;; the pool of the run, a reroll (5 gold, or free once after level 3 or
+;; with a merchant of level 3), the build, and the passives so far. The
+;; cards that are not chosen go back to the pool.
+task ChoosePassive (A, ui) {
+    val run = A.run
+    spawn @ui Modal()
+    spawn @ui TweenReal(4, CAM, [x=W/2, y=H/2, r=0], linear)
+    spawn @ui Text2(W/2 + 45, H/2 - 75, text([ [text="[fg, wavy]choose one", font=fat_font, alignment=:center] ]))
+    spawn @ui Text2(40, 20, text([ [text="[wavy_mid, fg]your build", font=pixul_font, alignment=:center] ]))
+    loop i, u in run.units {
+        val c = unit_character(u)
+        spawn @ui Text2(20 + 14 + text_width(pixul_font, c)/2, 40 + i*19,
+                        text([ [text="[" ++ character_color_strings@(c) ++ "]" ++ c, font=pixul_font, alignment=:left] ]))
+    }
+    spawn {
+        loop on :draw {
+            loop i, u in run.units {
+                val c = unit_character(u)
+                eng.rect(20, 40 + i*19, 14, 14, 3, 3, character_colors@(c))
+                print_centered(pixul_font, tostring(unit_level(u)), 20.5, 42 + i*19, 0, 1, 1,
+                               RAMPS@(character_color_strings@(c))@(-5))
+            }
+            loop i, p in run.passives {
+                draw_image(PASSIVE_IMAGES@(p.passive), 120 + i*30, H - 30, 0, 0.8*0.75, 0.7*0.75, fg@0)
+            }
+            text_draw(shop_text("[wavy_mid, fg]gold: [yellow]" ++ tostring(run.gold)), W - 40, H - 17)
+        }
+    }
+    var free = A.level == 3
+    loop _, u in run.units {
+        if (unit_character(u) == "merchant") && (unit_level(u) == 3) {
+            set free = true
+        }
+    }
+    var cards = []
+    val me = task
+    spawn @ui ShopButton(me, :reroll, W - 40, H - 40, \{
+        [ w=60, h=16, out="[bg10]reroll: [yellow]" ++ (if free => "0" => "5"),
+          over="[fgm5]reroll: " ++ (if free => "0" => "5"), color=bg@(-2) ] })
+    loop {
+        val picked = do {
+            pin cs = tasks()
+            set cards = []
+            val w = 4*70 + 3*20
+            loop i in 4 {
+                if #run.pool > 0 {
+                    val p = rtable_remove(run.pool)
+                    set cards@+ = p
+                    spawn @cs PassiveCard(me, i, W/2 - w/2 + i*90 + 35 + 45, H/2 - (if (i % 2) == 0 => 20 => 0), p)
+                }
+            }
+            if #cards == 0 {
+                nil
+            } else { loop {
+                val e = await <:Passive.pick || :Button.click>
+                ifs {
+                    e ?? :Passive.pick => break(e.i)
+                    (e.id == :reroll) && (e.but == 1) => {
+                        if !free && (run.gold < 5) {
+                            play(error1, [pitch=rfloat(0.95, 1.05), volume=0.5])
+                            spring_pull(e.spring, 0.2, 200, 10)
+                        } else {
+                            play(ui_switch2, [pitch=rfloat(0.95, 1.05), volume=0.5])
+                            spring_pull(e.spring, 0.2, 200, 10)
+                            if !free {
+                                set run.gold -= 5
+                            }
+                            set free = false
+                            break(:reroll)
+                        }
+                    }
+                }
+            } }
+        }
+        if picked != :reroll {
+            ;; the chosen one joins the run; the others go back to the pool
+            loop i, p in cards {
+                if i == picked {
+                    set run.passives@+ = [ passive=p, level=1, xp=0 ]
+                } else {
+                    set run.pool@+ = p
+                }
+            }
+            if picked != nil {
+                play(ui_switch1, [pitch=rfloat(0.95, 1.05), volume=0.5])
+                trace("passive", cards@(picked))
+            }
+            break
+        }
+        loop _, p in cards {
+            set run.pool@+ = p
+        }
+    }
+    ;; the global time comes back in 0.25s before the transition (the main
+    ;; group stays stopped, as `main_slow_amount`)
+    await WaitReal(0.25)
+}

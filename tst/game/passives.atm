@@ -1,0 +1,16 @@
+;; The choice of a passive after level 3: the level is clear, four cards
+;; come from the pool, a click on the first one takes it, and the run goes
+;; to the shop with it.
+include "../../src/game.atm"
+spawn Background()
+spawn Camera()
+spawn SlowMotion()
+spawn Input()
+
+val run = [ level=3, loop=0, gold=10, units=[ [character="vagrant", level=3, reserve=[0, 0]] ],
+            passives=[], pool=passive_pool(), shop_level=1, shop_xp=0 ]
+val A = new_arena(3)
+set A.run = run
+spawn Arena(A, [ [100, 100, 1] ])
+val e = await :goto
+print(eng.tick(), e.screen, "passives", #run.passives, (run.passives@0).passive, "pool", #run.pool)

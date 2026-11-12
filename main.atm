@@ -5,7 +5,7 @@ include "src/game.atm"
 
 ;; A new run, as the button "arena run" of the original makes one.
 func new_run () {
-    [ level=1, loop=0, gold=3, units=[], passives=[], shop_level=1, shop_xp=0 ]
+    [ level=1, loop=0, gold=3, units=[], passives=[], pool=passive_pool(), shop_level=1, shop_xp=0 ]
 }
 
 ;; The arena of the level of the run.
@@ -40,6 +40,15 @@ par {
         set screen = match next.screen {
             :buy_screen => do {
                 if next.counting {
+                    ;; the shop gains experience after each even level
+                    ;; (`Arena:transition`)
+                    if ((run.level % 2) == 0) && (run.shop_level < 5) {
+                        set run.shop_xp += 1
+                        if run.shop_xp >= shop_max_xp(run.shop_level) {
+                            set run.shop_xp = 0
+                            set run.shop_level += 1
+                        }
+                    }
                     set run.level += 1
                 }
                 [ Shop, run, "buy_screen" ]

@@ -1,0 +1,55 @@
+;; The passives of a run (the items of the shop): the pool they come from,
+;; their icons, and the fields that they give to the units. The choice of
+;; one every third level is in `choose.atm`.
+;;
+;; A passive of the run is a record [passive, level, xp]. Every unit gets
+;; a field with the level of each passive, as `Player:init`
+;; (`self[v.passive] = v.level`), which its behaviors read.
+
+;; The passives of a new run, in the order of the original.
+val PASSIVE_POOL = [
+    "centipede", "ouroboros_technique_r", "ouroboros_technique_l", "amplify", "resonance", "ballista",
+    "call_of_the_void", "crucio", "speed_3", "damage_4", "shoot_5", "death_6", "lasting_7",
+    "defensive_stance", "offensive_stance", "kinetic_bomb", "porcupine_technique", "last_stand", "seeping",
+    "deceleration", "annihilation", "malediction", "hextouch", "whispers_of_doom",
+    "tremor", "heavy_impact", "fracture", "meat_shield", "hive", "baneling_burst", "blunt_arrow",
+    "explosive_arrow", "divine_machine_arrow", "chronomancy", "awakening", "divine_punishment",
+    "assassination", "flying_daggers", "ultimatum", "magnify", "echo_barrage", "unleash", "reinforce",
+    "payback", "enchanted", "freezing_field", "burning_field", "gravity_field", "magnetism",
+    "insurance", "dividends", "berserking", "unwavering_stance", "unrelenting_stance", "blessing", "haste",
+    "divine_barrage", "orbitism", "psyker_orbs", "psychosink", "rearm", "taunt", "construct_instability",
+    "intimidation", "vulnerability", "temporal_chains", "ceremonial_dagger", "homing_barrage",
+    "critical_strike", "noxious_strike", "infesting_strike", "burning_strike", "lucky_strike",
+    "healing_strike", "stunning_strike",
+    "silencing_strike", "culling_strike", "lightning_strike", "psycholeak", "divine_blessing", "hardening",
+    "kinetic_strike",
+]
+
+func passive_pool () {
+    val p = []
+    loop _, x in PASSIVE_POOL {
+        set p@+ = x
+    }
+    p
+}
+
+;; The icons of the passives, by name.
+val PASSIVE_IMAGES = do {
+    val t = []
+    loop _, p in PASSIVE_POOL {
+        set t@(p) = image(p)
+    }
+    t
+}
+
+;; The passives of the run as fields of a unit.
+func unit_passives (u, passives) {
+    loop _, p in passives || [] {
+        set u@(p.passive) = p.level
+    }
+}
+
+;; The value of a passive of 3 levels: `v1`, `v2`, or `v3` (or `none`).
+func lv (l, v1, v2, v3, none) {
+    match l { 1 => v1 ; 2 => v2 ; 3 => v3 ; else => none }
+}

@@ -1,0 +1,4 @@
+SNX_FRAMES=1200
+SNX_TRACE=1
+SNX_INPUT=500:mv:150:115,502:dn:m1,503:up:m1
+SNX_SHOT=480:$OUT/game-passives.png

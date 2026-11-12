@@ -249,11 +249,18 @@ task Modal () {
 ;;; GOLD ;;;
 
 ;; As `Arena:gain_gold`: the gold of the level, the gold picked up, and
-;; the interest (a fifth of the gold, up to 5).
+;; the interest (a fifth of the gold, up to 5; and a tenth, up to 10, with
+;; a merchant).
 func gain_gold (A) {
     val r = level_to_gold_gained@(A.level)
     set A.gold_gained = rint(r@0, r@1)
-    set A.interest = math.min(math.floor(A.run.gold/5), 5)
+    var merchant = false
+    loop _, u in A.run.units {
+        if unit_character(u) == "merchant" {
+            set merchant = true
+        }
+    }
+    set A.interest = math.min(math.floor(A.run.gold/5), 5) + math.min(if merchant => math.floor(A.run.gold/10) => 0, 10)
     set A.run.gold = A.run.gold + A.gold_gained + A.gold_picked_up + A.interest
 }
 
@@ -291,15 +298,29 @@ task SlowDown (dur) {
 ;; the slow motion, and the transition to the shop.
 task Clear (A, ui) {
     trace("clear", tostring(A.level))
-    val t = text([ [text="[wavy_mid]arena clear!", font=fat_font, alignment=:center] ])
-    spawn @ui Text2(W/2, H/2 - 48, t)
-    spawn @ui Cbyc(t, :cbyc)
     gain_gold(A)
     spawn {
         await WaitReal(2)
         await SlowDown(0.7)
     }
-    await WaitReal(3)
+    ;; every third level, a passive to choose, up to eight
+    val choose = A.run && A.run.pool && (((A.level - 25*A.loop) % 3) == 0) && (#A.run.passives < 8)
+    do {
+        pin cl = tasks()
+        val t = text([ [text="[wavy_mid]arena clear!", font=fat_font, alignment=:center] ])
+        spawn @cl Text2(W/2, H/2 - 48, t)
+        spawn @cl Cbyc(t, :cbyc)
+        await WaitReal(3)
+        if !choose {
+            await ClearGo(A)
+        }
+    }
+    await ChoosePassive(A, ui)
+    await ClearGo(A)
+}
+
+;; The transition from a level that is clear to the shop.
+task ClearGo (A) {
     val l = A.units@0
     play(ui_transition2, [pitch=rfloat(0.95, 1.05), volume=0.5])
     emit @:global :goto [ screen=:buy_screen, x=l && l.x || (W/2), y=l && l.y || (H/2),

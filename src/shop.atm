@@ -11,7 +11,7 @@
 ;;
 ;; Not yet ported: the texts that explain an object under the mouse
 ;; (`InfoText`), the dragging of a unit to another place in the party, the
-;; items, the tutorial and its button "?".
+;; tutorial and its button "?".
 
 ;; The images of the classes, by name.
 val CLASS_IMAGES = do {
@@ -383,6 +383,70 @@ task Party (shop, run, fx) {
     await(false)
 }
 
+;;; ITEMS ;;;
+
+;; An item of the shop (`ItemCard`): the icon of a passive of the run,
+;; with its experience toward the next level. A click asks for one more
+;; experience (`:Shop.item_up`), a right click to sell it (`:Shop.item_sell`).
+task ItemCard (shop, i, x, y, p) {
+    val s = spring(1)
+    spawn UISprings(s)
+    val fixed = X.xin(p.passive, unlevellable_items)
+    var selected = false
+    spawn {
+        loop on :draw {
+            eng.push(x, y, 0, s.x)
+            if selected {
+                eng.rect(x, y, 40, 50, 6, 6, bg@(-1))
+            }
+            draw_image(PASSIVE_IMAGES@(p.passive), x, y, 0, 0.8, 0.7, fg@0)
+            if !fixed {
+                val px, py = x + 40/2.5, y - 50/2.5
+                if p.level == 1 {
+                    eng.rect(px - 2, py, 2, 2, nil, nil, if p.xp >= 1 => fg@0 => bg@5)
+                    eng.rect(px + 2, py, 2, 2, nil, nil, bg@5)
+                }
+                if p.level == 2 {
+                    eng.rect(px - 4, py, 2, 2, nil, nil, if p.xp >= 1 => fg@0 => bg@5)
+                    eng.rect(px, py, 2, 2, nil, nil, if p.xp >= 2 => fg@0 => bg@5)
+                    eng.rect(px + 4, py, 2, 2, nil, nil, bg@5)
+                }
+            }
+            eng.pop()
+        }
+    }
+    val inside = func () {
+        val mx, my = eng.mouse()
+        (mx >= x - 20) && (mx <= x + 20) && (my >= y - 25) && (my <= y + 25)
+    }
+    loop {
+        if !inside() {
+            await :mouse.mv until inside()
+        }
+        set selected = true
+        play(ui_hover1, [pitch=rfloat(1.3, 1.5), volume=0.5])
+        spring_pull(s, 0.2, 200, 10)
+        par :any {
+            await :mouse.mv until !inside()
+        } with {
+            loop e on :mouse.dn {
+                if (e.but == 1) && !fixed && (p.level < 3) {
+                    emit @shop :Shop.item_up [ i=i, spring=s ]
+                }
+                if e.but == 3 {
+                    emit @shop :Shop.item_sell [ i=i ]
+                }
+            }
+        }
+        set selected = false
+    }
+}
+
+;; The experience of each level of an item.
+func item_max_xp (level) {
+    match level { 1 => 2 ; 2 => 3 ; else => 0 }
+}
+
 ;;; RULES ;;;
 
 ;; Three characters for the cards, by the odds of the level of the shop,
@@ -525,6 +589,19 @@ task Shop (run) {
         }
     }
 
+    ;; the items, rebuilt when they change
+    spawn {
+        loop {
+            do {
+                pin is = tasks()
+                loop k, p in run.passives {
+                    spawn @is ItemCard(task, k, 45 + (k % 4)*60, 182 + (k // 4)*50, p)
+                }
+                await :Shop.items
+            }
+        }
+    }
+
     ;; the party, rebuilt when the units change
     spawn {
         loop {
@@ -567,7 +644,7 @@ task Shop (run) {
         }
     }
     loop {
-        val e = await <:Button.click || :Shop.buy || :Shop.sell || :key.dn>
+        val e = await <:Button.click || :Shop.buy || :Shop.sell || :Shop.item_up || :Shop.item_sell || :key.dn>
         val id = ifs {
             e ?? :Button.click => e.id
             e ?? :key.dn => match e.name {
@@ -598,6 +675,39 @@ task Shop (run) {
                     play(error1, [pitch=rfloat(0.95, 1.05), volume=0.5])
                     emit @:task :Shop.denied [ i=buy ]
                 }
+            }
+            e ?? :Shop.item_up => {
+                val p = run.passives@(e.i)
+                if run.gold < 5 {
+                    play(error1, [pitch=rfloat(0.95, 1.05), volume=0.5])
+                    spring_pull(e.spring, 0.2, 200, 10)
+                } else {
+                    play(ui_switch2, [pitch=rfloat(0.95, 1.05), volume=0.5])
+                    set p.xp += 1
+                    if p.xp >= item_max_xp(p.level) {
+                        set p.xp = 0
+                        set p.level += 1
+                        if p.level == 2 {
+                            play(spawn_mark1, [pitch=1, volume=0.6])
+                        }
+                        if p.level == 3 {
+                            play(spawn_mark1, [pitch=1.2, volume=0.6])
+                            play(level_up1, [pitch=1, volume=0.5])
+                        }
+                    }
+                    spring_pull(e.spring, 0.2, 200, 10)
+                    set run.gold -= 5
+                    emit @:task :Shop.gold
+                }
+            }
+            e ?? :Shop.item_sell => {
+                val p = run.passives@(e.i)
+                play(rtable([coins1, coins2, coins3]), [pitch=rfloat(0.95, 1.05), volume=0.5])
+                set run.gold += match p.level { 1 => 10 ; 2 => 20 ; else => 30 }
+                set run.pool@+ = p.passive
+                vector.remove(run.passives, e.i)
+                emit @:task :Shop.items
+                emit @:task :Shop.gold
             }
             e ?? :Shop.sell => {
                 coins()
