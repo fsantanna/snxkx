@@ -11,9 +11,9 @@
 187	unit.hit	swordsman 68.4
 222	unit.hit	swordsman 32.6
 223	unit.hit	archer 61.6
-518	unit.hit	swordsman -3.2
-518	unit.die	swordsman
-715	unit.hit	archer 23.3
-746	unit.hit	archer -15.1
-746	unit.die	archer
-746	died	1
+527	unit.hit	swordsman -3.2
+527	unit.die	swordsman
+733	unit.hit	archer 23.3
+733	unit.hit	archer -15.1
+733	unit.die	archer
+733	died	1

@@ -55,23 +55,6 @@ task SlowMotion () {
     }
 }
 
-;; A tween in real time (as the global `trigger` of the original).
-task TweenReal (dur, target, source, method) {
-    val from = []
-    loop k, _ in source {
-        set from@(k) = target@(k)
-    }
-    var timer = 0
-    loop e on :tick {
-        set timer += e.us / 1000000
-        val t = method(timer / dur)
-        loop k, v in source {
-            set target@(k) = lerp(t, from@(k), v)
-        }
-        until timer > dur
-    }
-}
-
 ;; Shows the bar of hp for `n` seconds, as `Unit:show_hp`: every call
 ;; restarts it (the bar shows while any is on).
 task ShowHp (u, n) {

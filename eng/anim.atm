@@ -92,6 +92,32 @@ task Tween (dur, target, source, method) {
     }
 }
 
+;; The seconds of a tick of real time, as the `dt` of the original: a
+;; tick is 1/60 s, which the driver gives in whole microseconds (16666 or
+;; 16667). The sum of the original, in floats, decides in which tick a
+;; timer ends (6 ticks are not more than 0.1 s, 36 ticks are more than
+;; 0.6 s), so the port adds the same floats.
+func tick_dt (us) {
+    math.floor(us*60/1000000 + 0.5) / 60
+}
+
+;; A tween in real time (as the global `trigger` of the original).
+task TweenReal (dur, target, source, method) {
+    val from = []
+    loop k, _ in source {
+        set from@(k) = target@(k)
+    }
+    var timer = 0
+    loop e on :tick {
+        set timer += tick_dt(e.us)
+        val t = (method || linear)(timer / dur)
+        loop k, v in source {
+            set target@(k) = lerp(t, from@(k), v)
+        }
+        until timer > dur
+    }
+}
+
 ;; The same, in every tick of real time, for the interface, which keeps
 ;; moving in slow motion (`force_update` of the original).
 task UISprings (...) {
@@ -109,7 +135,7 @@ task UISprings (...) {
 task WaitReal (s) {
     var timer = 0
     loop e on :tick {
-        set timer += e.us / 1000000
+        set timer += tick_dt(e.us)
         until timer > s
     }
 }

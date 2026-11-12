@@ -139,219 +139,184 @@
 2313	add	Seeker 388.0 123.0
 2318	unit.hit	swordsman 530.3
 2348	unit.hit	archer 272.7
-2429	add	SpawnMarker 400.0 59.0
-2431	add	SpawnMarker 240.0 135.0
-2432	add	SpawnMarker 400.0 211.0
-2432	add	SpawnMarker 80.0 211.0
-2507	enemy.die	speed_booster
-2507	unit.hit	scout 267.5
-2508	add	Seeker 388.0 47.0
-2511	add	Seeker 388.0 199.0
-2511	add	Seeker 68.0 199.0
-2511	add	Seeker 228.0 123.0
-2601	unit.hit	cleric 413.1
-2633	enemy.die	seeker
-2633	unit.hit	archer 256.7
-2652	enemy.die	seeker
-2652	unit.hit	archer 240.8
-2661	enemy.die	seeker
-2661	unit.hit	archer 224.9
-2666	enemy.die	seeker
-2666	unit.hit	archer 209.0
-2703	unit.hit	archer 189.4
-2926	unit.hit	archer 173.5
-2938	unit.hit	archer 157.6
-2960	unit.hit	archer 141.6
-2993	enemy.die	seeker
-2993	unit.hit	archer 125.7
-3234	enemy.die	seeker
-3234	unit.hit	swordsman 515.4
-3236	enemy.die	seeker
-3236	unit.hit	archer 109.8
-3274	enemy.die	seeker
-3274	unit.hit	wizard 68.2
-3274	wave	boss
-3304	add	SpawnMarker 80.0 135.0
-3384	add	Seeker 68.0 123.0
-3390	add	Seeker 92.0 123.0
-3396	add	Seeker 92.0 147.0
-3402	add	Seeker 68.0 147.0
-3408	add	Seeker 80.0 135.0
-3414	add	Seeker 68.0 123.0
-3426	add	Seeker 92.0 147.0
-3432	add	Seeker 68.0 147.0
-3438	add	Seeker 80.0 135.0
-3444	add	Seeker 68.0 123.0
-3585	unit.hit	archer 93.9
-3593	unit.hit	archer 74.3
-3596	unit.hit	archer 58.4
-3602	unit.hit	wizard 51.8
-3602	unit.hit	archer 42.4
-3605	unit.hit	archer 26.5
-3615	unit.hit	wizard 35.4
-3618	unit.hit	archer 10.6
-3635	unit.hit	wizard 18.9
-3720	enemy.die	seeker
-3720	unit.hit	scout 251.2
-3742	unit.hit	archer -5.3
-3742	unit.die	archer
-3784	enemy.die	seeker
-3784	unit.hit	wizard 2.5
-3788	enemy.die	seeker
-3788	unit.hit	swordsman 500.6
-3795	enemy.die	seeker
-3795	unit.hit	wizard -13.9
-3795	unit.die	wizard
-3802	unit.hit	swordsman 485.7
-3811	enemy.die	seeker
-3811	unit.hit	scout 235.0
-4084	enemy.die	seeker
-4084	unit.hit	swordsman 470.9
+2423	add	SpawnMarker 240.0 135.0
+2433	add	SpawnMarker 80.0 59.0
+2433	add	SpawnMarker 400.0 211.0
+2434	add	SpawnMarker 400.0 59.0
+2497	enemy.die	speed_booster
+2497	unit.hit	swordsman 515.4
+2503	add	Seeker 228.0 123.0
+2512	add	Seeker 68.0 47.0
+2513	add	Seeker 388.0 199.0
+2514	add	Seeker 388.0 47.0
+2636	enemy.die	seeker
+2636	unit.hit	archer 256.7
+2655	enemy.die	seeker
+2655	unit.hit	archer 240.8
+2656	unit.hit	archer 224.9
+2657	enemy.die	seeker
+2657	unit.hit	archer 209.0
+2677	enemy.die	seeker
+2677	unit.hit	archer 193.1
+2734	enemy.die	seeker
+2734	unit.hit	swordsman 500.6
+2749	unit.hit	archer 177.1
+2757	unit.hit	archer 161.2
+2969	unit.hit	archer 141.6
+2997	unit.hit	wizard 68.2
+2997	enemy.die	seeker
+2997	unit.hit	archer 125.7
+3239	enemy.die	seeker
+3239	unit.hit	archer 109.8
+3268	unit.hit	archer 90.2
+3288	enemy.die	seeker
+3288	unit.hit	wizard 51.8
+3288	wave	boss
+3318	add	SpawnMarker 400.0 135.0
+3398	add	Seeker 388.0 123.0
+3404	add	Seeker 412.0 123.0
+3410	add	Seeker 412.0 147.0
+3415	unit.hit	archer 74.3
+3422	add	Seeker 400.0 135.0
+3422	enemy.die	seeker
+3422	unit.hit	archer 58.4
+3428	add	Seeker 388.0 123.0
+3430	unit.hit	swordsman 485.7
+3434	add	Seeker 412.0 123.0
+3443	unit.hit	cleric 413.1
+3443	unit.hit	archer 42.4
+3444	enemy.die	seeker
+3444	unit.hit	wizard 35.4
+3446	add	Seeker 388.0 147.0
+3452	add	Seeker 400.0 135.0
+3454	unit.hit	archer 26.5
+3460	unit.hit	wizard 18.9
+3488	unit.hit	swordsman 470.9
+3490	enemy.die	seeker
+3490	unit.hit	cleric 398.1
+3753	enemy.die	seeker
+3753	unit.hit	archer 10.6
+3819	unit.hit	archer -5.3
+3819	unit.die	archer
+3873	enemy.die	seeker
+3873	unit.hit	wizard 2.5
+4069	enemy.die	seeker
+4069	unit.hit	wizard -13.9
+4069	unit.die	wizard
 4121	enemy.die	seeker
 4121	unit.hit	swordsman 456.0
-4133	enemy.die	seeker
-4133	unit.hit	scout 218.8
-4135	enemy.die	seeker
-4135	unit.hit	swordsman 441.1
-4155	enemy.die	seeker
-4155	unit.hit	swordsman 426.3
-4155	wave	boss
-4169	unit.hit	cleric 394.6
-4185	add	SpawnMarker 240.0 135.0
-4265	add	Seeker 228.0 123.0
-4271	add	Seeker 252.0 123.0
-4277	add	Seeker 252.0 147.0
-4283	add	Seeker 228.0 147.0
-4289	add	Seeker 240.0 135.0
-4295	add	Seeker 228.0 123.0
-4301	add	Seeker 252.0 123.0
-4307	add	Seeker 252.0 147.0
-4313	add	Seeker 228.0 147.0
-4319	add	Seeker 240.0 135.0
-4325	add	Seeker 228.0 123.0
-4390	unit.hit	swordsman 411.4
-4401	unit.hit	swordsman 396.6
-4405	unit.hit	cleric 379.6
-4411	unit.hit	swordsman 381.7
-4411	unit.hit	swordsman 366.9
-4421	unit.hit	swordsman 352.0
-4464	enemy.die	seeker
-4464	unit.hit	cleric 364.6
-4657	enemy.die	seeker
-4657	unit.hit	scout 202.5
-4661	unit.hit	swordsman 337.1
-4666	unit.hit	swordsman 322.3
-4671	enemy.die	seeker
-4671	unit.hit	swordsman 307.4
-4672	enemy.die	speed_booster
-4672	unit.hit	swordsman 292.6
-4680	unit.hit	swordsman 277.7
-4684	unit.hit	swordsman 262.9
-4690	unit.hit	scout 186.2
-4690	enemy.die	speed_booster
-4690	unit.hit	swordsman 248.0
-4708	unit.hit	swordsman 229.7
+4171	enemy.die	seeker
+4171	unit.hit	scout 267.5
+4171	wave	boss
+4201	add	SpawnMarker 240.0 135.0
+4281	add	Seeker 228.0 123.0
+4287	add	Seeker 252.0 123.0
+4293	add	Seeker 252.0 147.0
+4299	add	Seeker 228.0 147.0
+4305	add	Seeker 240.0 135.0
+4311	add	Seeker 228.0 123.0
+4317	add	Seeker 252.0 123.0
+4323	add	Seeker 252.0 147.0
+4335	add	Seeker 240.0 135.0
+4341	add	Seeker 228.0 123.0
+4392	add	SpawnMarker 80.0 59.0
+4396	add	SpawnMarker 80.0 211.0
+4396	add	SpawnMarker 400.0 211.0
+4397	add	SpawnMarker 240.0 135.0
+4401	unit.hit	swordsman 441.1
+4407	unit.hit	scout 251.2
+4407	unit.hit	swordsman 426.3
+4410	unit.hit	swordsman 411.4
+4416	unit.hit	swordsman 396.6
+4419	unit.hit	swordsman 381.7
+4426	enemy.die	seeker
+4426	unit.hit	swordsman 366.9
+4431	unit.hit	swordsman 352.0
+4462	unit.hit	cleric 383.1
+4472	add	Seeker 68.0 47.0
+4475	add	Seeker 68.0 199.0
+4475	add	Seeker 388.0 199.0
+4477	add	Seeker 228.0 123.0
+4554	unit.hit	scout 235.0
+4555	enemy.die	seeker
+4555	unit.hit	swordsman 337.1
+4565	enemy.die	seeker
+4565	unit.hit	swordsman 322.3
+4620	enemy.die	seeker
+4620	unit.hit	swordsman 307.4
+4666	unit.hit	scout 218.8
+4669	enemy.die	seeker
+4669	unit.hit	swordsman 292.6
+4673	unit.hit	swordsman 277.7
+4690	unit.hit	swordsman 262.9
+4696	enemy.die	seeker
+4696	unit.hit	cleric 368.1
 4714	enemy.die	seeker
-4714	unit.hit	swordsman 214.9
-4726	enemy.die	seeker
-4726	unit.hit	swordsman 200.0
-4851	enemy.die	speed_booster
-4851	unit.hit	scout 170.0
-4899	enemy.die	seeker
-4899	unit.hit	swordsman 185.1
-4909	enemy.die	seeker
-4909	unit.hit	swordsman 170.3
-5221	enemy.die	seeker
-5221	unit.hit	swordsman 155.4
-5221	wave	boss
-5251	add	SpawnMarker 240.0 135.0
-5258	unit.hit	cleric 346.2
-5261	unit.hit	cleric 327.7
-5331	add	Seeker 228.0 123.0
-5337	add	Seeker 252.0 123.0
-5343	add	Seeker 252.0 147.0
-5349	add	Seeker 228.0 147.0
-5361	add	Seeker 228.0 123.0
-5367	add	Seeker 252.0 123.0
-5373	add	Seeker 252.0 147.0
-5379	add	Seeker 228.0 147.0
-5385	add	Seeker 240.0 135.0
-5391	add	Seeker 228.0 123.0
-5491	unit.hit	swordsman 140.6
-5497	unit.hit	scout 153.8
-5501	unit.hit	swordsman 125.7
-5502	unit.hit	swordsman 110.9
-5507	enemy.die	speed_booster
-5507	unit.hit	swordsman 96.0
-5520	unit.hit	swordsman 81.1
-5521	unit.hit	swordsman 66.3
-5522	enemy.die	seeker
-5522	unit.hit	scout 137.5
-5526	unit.hit	swordsman 51.4
-5532	unit.hit	cleric 312.7
-5541	unit.hit	scout 121.2
-5541	enemy.die	seeker
-5541	unit.hit	swordsman 36.6
-5733	enemy.die	seeker
-5733	unit.hit	swordsman 21.7
-5755	unit.hit	swordsman 6.9
-5760	enemy.die	seeker
-5760	unit.hit	swordsman -8.0
-5760	unit.die	swordsman
-6065	enemy.die	seeker
-6065	unit.hit	scout 105.0
-6074	enemy.die	seeker
-6074	unit.hit	scout 88.8
-6077	enemy.die	speed_booster
-6077	unit.hit	scout 72.5
-6085	enemy.die	seeker
-6085	unit.hit	scout 56.2
-6292	enemy.die	seeker
-6292	unit.hit	cleric 297.7
-6292	wave	boss
-6318	enemy.die	speed_booster
-6318	unit.hit	scout 36.2
-6334	add	SpawnMarker 400.0 135.0
-6425	add	Seeker 388.0 123.0
-6431	add	Seeker 412.0 123.0
-6437	add	Seeker 412.0 147.0
-6443	add	Seeker 388.0 147.0
-6449	add	Seeker 400.0 135.0
-6455	add	Seeker 388.0 123.0
-6461	add	Seeker 412.0 123.0
-6467	add	Seeker 412.0 147.0
-6473	add	Seeker 388.0 147.0
-6479	add	Seeker 400.0 135.0
-6653	unit.hit	scout 20.0
-6662	enemy.die	seeker
-6662	unit.hit	scout 3.8
-6665	unit.hit	cleric 282.7
-6666	unit.hit	scout -12.5
-6666	unit.die	scout
-6694	unit.hit	cleric 267.7
-6701	unit.hit	cleric 252.7
-6716	unit.hit	cleric 237.7
-6719	unit.hit	cleric 222.7
-6800	enemy.die	speed_booster
-6800	unit.hit	cleric 207.7
-6850	enemy.die	seeker
-6850	unit.hit	cleric 192.7
-6852	unit.hit	cleric 177.7
-6855	enemy.die	seeker
-6855	unit.hit	cleric 162.7
-6856	unit.hit	cleric 147.7
-6858	unit.hit	cleric 132.7
-6874	enemy.die	seeker
-6874	unit.hit	cleric 117.7
-6960	enemy.die	seeker
-6960	unit.hit	cleric 102.7
-6977	enemy.die	seeker
-6977	unit.hit	cleric 87.7
-7208	enemy.die	seeker
-7208	unit.hit	cleric 72.7
-7502	enemy.die	seeker
-7502	unit.hit	cleric 57.7
-7533	enemy.die	speed_booster
-7533	unit.hit	cleric 42.7
-7533	clear	6
-7714	buy_screen	11
+4714	unit.hit	scout 202.5
+4750	unit.hit	swordsman 248.0
+4932	enemy.die	seeker
+4932	unit.hit	swordsman 233.1
+4934	enemy.die	seeker
+4934	unit.hit	swordsman 218.3
+4937	unit.hit	swordsman 203.4
+4949	enemy.die	seeker
+4949	unit.hit	swordsman 188.6
+4964	enemy.die	seeker
+4964	unit.hit	swordsman 173.7
+4976	enemy.die	seeker
+4976	unit.hit	swordsman 158.9
+4978	unit.hit	swordsman 140.6
+4984	enemy.die	speed_booster
+4984	unit.hit	swordsman 125.7
+5182	enemy.die	seeker
+5182	unit.hit	swordsman 110.9
+5182	wave	boss
+5211	unit.hit	swordsman 92.6
+5212	add	SpawnMarker 400.0 135.0
+5292	add	Seeker 388.0 123.0
+5298	add	Seeker 412.0 123.0
+5304	add	Seeker 412.0 147.0
+5310	add	Seeker 388.0 147.0
+5316	add	Seeker 400.0 135.0
+5322	add	Seeker 388.0 123.0
+5328	add	Seeker 412.0 123.0
+5334	add	Seeker 412.0 147.0
+5346	add	Seeker 400.0 135.0
+5352	add	Seeker 388.0 123.0
+5364	unit.hit	swordsman 74.3
+5381	enemy.die	speed_booster
+5381	unit.hit	swordsman 56.0
+5582	unit.hit	swordsman 41.1
+5591	unit.hit	swordsman 26.3
+5594	unit.hit	swordsman 11.4
+5601	unit.hit	swordsman -3.4
+5601	unit.die	swordsman
+5630	unit.hit	scout 186.2
+5634	unit.hit	scout 170.0
+5644	unit.hit	scout 153.8
+5660	enemy.die	seeker
+5660	unit.hit	cleric 353.1
+5767	enemy.die	seeker
+5767	unit.hit	scout 137.5
+5771	enemy.die	seeker
+5771	unit.hit	cleric 338.1
+5801	unit.hit	scout 121.2
+5811	unit.hit	scout 105.0
+5813	unit.hit	scout 88.8
+5842	enemy.die	seeker
+5842	unit.hit	scout 72.5
+6046	enemy.die	seeker
+6046	unit.hit	scout 56.2
+6069	enemy.die	seeker
+6069	unit.hit	scout 40.0
+6097	enemy.die	seeker
+6097	unit.hit	scout 23.8
+6110	enemy.die	seeker
+6110	unit.hit	scout 7.5
+6322	enemy.die	seeker
+6322	unit.hit	scout -8.8
+6322	unit.die	scout
+6401	enemy.die	seeker
+6401	unit.hit	cleric 323.1
+6401	clear	6
+6582	buy_screen	13
