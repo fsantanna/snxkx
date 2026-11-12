@@ -12,5 +12,6 @@ val es = []
 loop i in 12 {
     set es@+ = [100 + 25*i, 80 + 10*(i%5), 5]
 }
-val r = await Arena(A, [["vagrant", 1]], es)
+set A.run = [ units=[["vagrant", 1]], gold=3 ]
+val r = await Arena(A, es)
 print(eng.tick(), r, #A.enemies)

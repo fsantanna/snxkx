@@ -1,7 +1,11 @@
+0	add	Seeker 200.0 60.0
+0	add	Seeker 300.0 200.0
+0	add	Seeker 100.0 200.0
 205	unit.hit	swordsman 136.6
 273	enemy.die	seeker
 273	unit.hit	vagrant 146.0
 501	enemy.die	seeker
 501	unit.hit	vagrant 142.0
 512	enemy.die	seeker
+512	clear	1
 512	unit.hit	vagrant 138.0

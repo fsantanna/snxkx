@@ -11,6 +11,8 @@
 --   SNKRX_TRACE=file        writes the trace there (default stdout)
 --   SNKRX_TRACE_RANDOM=1    also traces the calls to the generator
 --   SNKRX_DUMP=file         dumps the data of the game (see dump.lua), quits
+--   SNKRX_TRACE_POS=Class   traces the position and velocity of the objects
+--                           of a class of the main group, in every tick
 --
 -- Time is simulated: every loop runs exactly one tick, and
 -- `love.timer.getTime` returns ticks * 1/60, so that runs repeat.
@@ -21,6 +23,7 @@
 --   add     an object is added to a group      class x y
 --   fire    a timer runs its action            kind delay file:line
 --   rnd     a call to the generator            method result file:line
+--   pos     an object, before the tick         class id x y vx vy
 --   end     the run ends                       -
 
 bench = {}
@@ -108,6 +111,9 @@ function bench.spairs (t)
   end
 end
 
+-- (The tracing wrappers below are wrapped again by the numbering ones, so
+-- the caller of a timer is 4 levels up from `where`.)
+
 -- Called at the start of `engine_run`, when the engine is loaded.
 function bench.install ()
   love.math.setRandomSeed(seed)
@@ -124,23 +130,23 @@ function bench.install ()
 
   local after = Trigger.after
   function Trigger:after (delay, action, tag)
-    return after(self, delay, wrap("after", delay, action, where(3)), tag)
+    return after(self, delay, wrap("after", delay, action, where(4)), tag)
   end
   local every = Trigger.every
   function Trigger:every (delay, action, times, after, tag)
-    return every(self, delay, wrap("every", delay, action, where(3)), times, after, tag)
+    return every(self, delay, wrap("every", delay, action, where(4)), times, after, tag)
   end
   local every_immediate = Trigger.every_immediate
   function Trigger:every_immediate (delay, action, times, after, tag)
-    return every_immediate(self, delay, wrap("every", delay, action, where(3)), times, after, tag)
+    return every_immediate(self, delay, wrap("every", delay, action, where(4)), times, after, tag)
   end
   local cooldown = Trigger.cooldown
   function Trigger:cooldown (delay, cond, action, times, after, tag)
-    return cooldown(self, delay, cond, wrap("cooldown", delay, action, where(3)), times, after, tag)
+    return cooldown(self, delay, cond, wrap("cooldown", delay, action, where(4)), times, after, tag)
   end
   local tween = Trigger.tween
   function Trigger:tween (delay, target, source, method, after, tag)
-    return tween(self, delay, target, source, method, wrap("tween", delay, after, where(3)), tag)
+    return tween(self, delay, target, source, method, wrap("tween", delay, after, where(4)), tag)
   end
 
   for _, m in ipairs{"run", "after", "cooldown", "every", "every_immediate", "during", "tween"} do
@@ -190,6 +196,16 @@ function bench.frame ()
         love.event.push(p[2] == "dn" and "mousepressed" or "mousereleased", mx*sx, my*sy, tonumber(b))
       else
         love.event.push(p[2] == "dn" and "keypressed" or "keyreleased", k)
+      end
+    end
+  end
+  if os.getenv("SNKRX_TRACE_POS") and main and main.current and main.current.main and main.current.main.objects then
+    local cls = _G[os.getenv("SNKRX_TRACE_POS")]
+    for _, o in ipairs(main.current.main.objects) do
+      if getmetatable(o) == cls then
+        local vx, vy = 0, 0
+        if o.body then vx, vy = o.body:getLinearVelocity() end
+        bench.trace("pos", string.format("%s %s %.2f %.2f %.2f %.2f", os.getenv("SNKRX_TRACE_POS"), o.id:sub(1, 4), o.x, o.y, vx, vy))
       end
     end
   end

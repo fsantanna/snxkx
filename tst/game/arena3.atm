@@ -8,6 +8,6 @@ spawn Input()
 spawn SlowMotion()
 
 val A = new_arena(1)
-val r = await Arena(A, [["vagrant", 1], ["swordsman", 1], ["archer", 1]],
-                       [[300, 151, 20], [330, 151, 20], [360, 151, 20], [390, 151, 20]])
+set A.run = [ units=[["vagrant", 1], ["swordsman", 1], ["archer", 1]], gold=3 ]
+val r = await Arena(A, [[300, 151, 20], [330, 151, 20], [360, 151, 20], [390, 151, 20]])
 print(eng.tick(), r)
