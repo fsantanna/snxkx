@@ -688,3 +688,161 @@ to end).
 The counter is still a variable that the drawing reads. It is not a
 flag set in one place and cleared in another, though: each task
 increments and decrements it around its own wait.
+
+---
+
+## 9. Wave progression
+
+A level that is not of a boss counts down from 3, and then sends waves
+of enemies, each one when the arena is empty, until the last wave is
+gone; then the arena is clear.
+
+### Lua + LÖVE
+
+The level is set up in `Arena:on_enter` (`arena.lua:205-240`) as timers
+inside the callbacks of timers, five levels deep:
+
+```lua
+self.wave = 0
+self.start_time = 3
+self.t:after(1, function()
+  self.t:every(1, function()
+    if self.start_time > 1 then alert1:play{volume = 0.5} end
+    self.start_time = self.start_time - 1
+    self.hfx:use('condition1', 0.25, 200, 10)
+  end, 3, function()
+    alert1:play{pitch = 1.2, volume = 0.5}
+    camera:shake(4, 0.25)
+    SpawnEffect{group = self.effects, x = gw/2, y = gh/2 - 48}
+    self.t:every(function() return #self.main:get_objects_by_classes(self.enemies) <= 0 and not self.spawning_enemies end, function()
+      self.wave = self.wave + 1
+      if self.wave > self.max_waves then return end
+      self.hfx:use('condition1', 0.25, 200, 10)
+      self.hfx:pull('condition2', 0.0625)
+      self.t:after(0.5, function()
+        if random:bool(self.level_to_distributed_enemies_chance[self.level]) then
+          ...
+        else
+          self.spawning_enemies = true
+          self.t:after((8 + (self.wave-1)*2)*0.1 + 0.5 + 0.75, function() self.spawning_enemies = false end, 'spawning_enemies')
+          ...
+          SpawnMarker{group = self.effects, x = p.x, y = p.y}
+          self.t:after(1.125, function() self:spawn_n_enemies(p, nil, 8 + (self.wave+math.min(self.loop*12, 200)-1)*2) end)
+        end
+      end)
+    end, self.max_waves+1)
+  end)
+  self.t:every(function() return #self.main:get_objects_by_classes(self.enemies) <= 0 and self.wave > self.max_waves and not self.quitting and not self.spawning_enemies end, function() self:quit() end)
+end)
+```
+
+The next wave is an `every` with a condition, which runs its callback
+when the condition becomes true: no enemies, and no spawning. Spawning
+is a flag, `spawning_enemies`, set when a wave starts and cleared by a
+timer with a tag, so that a later wave, or the respawn of blocked
+enemies (`arena.lua:298-320`), or each of the six patterns of
+distributed enemies (`arena.lua:1034-1078`), resets it. The end of the
+level is a second `every` with a condition, which reads the wave and
+two more flags, `quitting` and `spawning_enemies`.
+
+### Atmos
+
+The level is a task (`src/level.atm:76-105`):
+
+```
+task Waves (A, foes, spawns, fx) {
+    set A.max_waves = LEVEL_MAX_WAVES@(level_index(A.level))
+    set A.wave = 0
+    set A.start_time = 3
+    await 1s
+    loop _ in 3 {
+        await 1s
+        if A.start_time > 1 {
+            play(alert1, [volume=0.5])
+        }
+        set A.start_time -= 1
+        spawn HfxUse(A.cond1, 0.25, 200, 10)
+    }
+    play(alert1, [pitch=1.2, volume=0.5])
+    shake(4, 0.25)
+    spawn @fx SpawnCircle(W/2, H/2 - 48, red@0, fx)
+    loop {
+        await Quiet(foes, spawns)
+        set A.wave += 1
+        until A.wave > A.max_waves
+        spawn HfxUse(A.cond1, 0.25, 200, 10)
+        spring_pull(A.cond2.s, 0.0625)
+        await 500ms
+        if rbool(LEVEL_DISTRIBUTED@(level_index(A.level))) {
+            ...
+            spawn @spawns WaveDistributed(A, n, foes, fx)
+        } else {
+            val n = 8 + (A.wave + math.min(A.loop*12, 200) - 1)*2
+            spawn @spawns WaveGroup(A, n, foes, fx)
+        }
+    }
+}
+```
+
+The enemies are tasks in the pool `foes`, and every spawn is a task in
+the pool `spawns` while it lasts, so "no enemies, and no spawning" is
+both pools empty (`src/level.atm:36-46`):
+
+```
+task Quiet (foes, spawns) {
+    loop {
+        if #spawns > 0 {
+            await :all spawns
+        }
+        if #foes > 0 {
+            await :all foes
+        }
+        until (#spawns == 0) && (#foes == 0)
+    }
+}
+```
+
+The arena runs the waves, and then the end that comes first
+(`src/arena.atm:159-183`):
+
+```
+val r = par :any {
+    await :Arena.died
+    :died
+} with {
+    ...
+    await Waves(A, foes, spawns, effects)
+    ...
+    :clear
+}
+if r == :died {
+    await Died(A, ui)
+} else {
+    await Clear(A, ui)
+}
+```
+
+### Analysis
+
+The five levels of callbacks become one sequence, read from top to
+bottom: the countdown is a loop of three, the waves are a loop that
+awaits the arena quiet, and the end follows the loop. The `every` with
+three repetitions and a final callback (`every(1, f, 3, g)`) is a
+`loop _ in 3` followed by the code of `g`; the `every` with a condition
+and `max_waves + 1` repetitions is the loop of waves with its `until`.
+
+`spawning_enemies` was a flag shared by four writers, each of which
+cleared it with a timer named after it, so that the last writer wins.
+In the port, a spawn is a task, and "spawning" is the pool of those
+tasks not being empty: a writer cannot clear the spawning of another,
+and a spawn that ends early does not need a timer to say so.
+
+`quitting` and `died` guard the end of the level against a second end
+(`Arena:quit` and `Arena:die` both check them). In the port, the end is
+the `par :any` above: the first end aborts the other branch, so neither
+needs to check.
+
+The timings are the original's, measured with the traces of the same
+run (`tools/compare.py`): the first marker of level 1 comes 270 ticks
+after the arena starts in the port, 272 in the original, and its
+enemies 3 ticks earlier, 6 ticks apart in both.

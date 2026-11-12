@@ -22,9 +22,15 @@ a time, in the parts that the port covers, with what became of each one.
 | `seeking`, `wandering`, `separating` (and six others) | `engine/game/steering.lua` | which forces of the tick count | gone: the forces add up in one vector, consumed by `steer_update` |
 | `Flashes.f` (with a tagged timer) | `engine/game/flashes.lua` | a white flash after a hit | a counter of `HfxUse` tasks running (`src/fx.atm`) |
 | `HPBar.hidden` (with a tagged timer) | `objects.lua:198-203` | the bar of hp, shown for 2 s after a hit | a counter of `ShowHp` tasks running (`src/snake.atm`) |
+| `Arena.spawning_enemies` (with tagged timers) | `arena.lua:230-231, 298, 320, 1034-1078` | the next wave and the end wait while enemies spawn | gone: the pool `spawns` of tasks that spawn |
+| `Arena.quitting` | `arena.lua:425` | the end of a level happens once | gone: the end is after the loop of waves, in a `par :any` with death |
+| `Arena.died` | `arena.lua:820` | no spawns and no end after death | gone: death aborts the waves (`par :any`) |
+| `Arena.arena_clear_text` (as a flag) | `arena.lua:672` | the clear happens once | gone: as `quitting` |
+| `Arena.start_time` | `arena.lua:206-210` | the countdown, and the HUD reads it | kept as a field for the HUD; the countdown is a loop of three |
+| `Arena.wave` | `arena.lua:205, 217` | the number of the wave, read by the condition of the end and by the HUD | kept as a field for the HUD; the end follows the loop |
 
-Count so far: 18 variables in the original (counting the nine flags of
-the steering as one), 2 counters in the port.
+Count so far: 24 variables in the original (counting the nine flags of
+the steering as one), 2 counters and 2 fields for the HUD in the port.
 
 The two counters are state, but not a flag guarding a phase: each
 counts tasks that are running, and a task restarts the effect by simply
