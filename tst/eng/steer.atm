@@ -1,0 +1,28 @@
+;; Steering: a body seeks a point (max_v 100, max_f 2000, turn x2), as a
+;; seeker of the original, with linear damping 0. Its position every 30
+;; ticks of 1/60 s. `tools/bench/steer` runs the same with the formulas
+;; of the original on LÖVE 11 (Box2D 2.3): the positions differ by 0.7
+;; pixels at most (145.8 against 145.2 at tick 30), and both arrive at
+;; the point by tick 150.
+
+include "../../eng/eng.atm"
+include "../../eng/random.atm"
+include "../../eng/phys.atm"
+include "../../eng/steer.atm"
+
+pin w = phys_world(32, [:enemy])
+val rec = []
+val b = body(w, rec, :dynamic, 100, 100, :enemy, [:rect, 14, 6])
+val st = steerable(b, 100, 2000, 2*math.pi, 2)
+val f = \(v) { string.format("%.1f", v) }
+
+loop us on :clock {
+    steer_update(st)
+    seek_point(st, 300, 150)
+    phys_step(w, us/1000000)
+    val x, y = body_pos(b)
+    if eng.tick() % 30 == 0 {
+        print(eng.tick(), f(x), f(y))
+    }
+    until eng.tick() == 180
+}

@@ -1,0 +1,148 @@
+;; Steering behaviors, as `engine/game/steering.lua` of the original
+;; (after "Programming Game AI by Example"), over the bodies of
+;; `eng/phys.atm`.
+;;
+;; A steerable is a record of a body. In each tick, its task first calls
+;; `steer_update`, which applies the forces asked in the previous tick,
+;; and then asks new ones with `seek_point`, `wander`, and `separate`, in
+;; the order of the original (`update_game_object` comes first in the
+;; update of an object). The original keeps a flag per behavior for the
+;; tick; here the forces add up in one vector, which `steer_update`
+;; consumes.
+
+func vtruncate (x, y, max) {
+    val l2 = x*x + y*y
+    val s = if l2 == 0 => 1 => max*max/l2
+    val k = if s > 1 => 1 => math.sqrt(s)
+    return x*k, y*k
+}
+
+func vnormalize (x, y) {
+    val l = math.sqrt(x*x + y*y)
+    if l == 0 => (x, y) => (x/l, y/l)
+}
+
+;; As `set_as_steerable(max_v, max_f, max_turn_rate, turn_multiplier)`.
+func steerable (b, max_v, max_f, max_turn_rate, turn_multiplier) {
+    val r = rfloat(0, 2*math.pi)
+    :Steer [
+        b = b,
+        max_v = max_v || 100,
+        max_f = max_f || 2000,
+        max_turn_rate = max_turn_rate || (2*math.pi),
+        turn_multiplier = turn_multiplier || 2,
+        hx = 0, hy = 0,                 ;; heading
+        sx = 0, sy = 0,                 ;; side
+        fx = 0, fy = 0,                 ;; forces asked for the next update
+        wx = 40*math.cos(r), wy = 40*math.sin(r),   ;; wander target
+        ax = 0, ay = 0,                 ;; applied force (apply_steering_force)
+        ix = 0, iy = 0,                 ;; applied impulse (apply_steering_impulse)
+        enabled = true,
+    ]
+}
+
+;; As `steering_update`: applies the forces, limits the velocity, and
+;; updates the heading. The mass of the steering is 1, as the original.
+func steer_update (st) {
+    if !st.enabled {
+        return nil
+    }
+    val fx, fy = vtruncate(st.fx, st.fy, st.max_f)
+    body_set(st.b, :force, fx + st.ax, fy + st.ay)
+    val vx, vy = body_vel(st.b)
+    val tx, ty = vtruncate(vx, vy, st.max_v)
+    body_set(st.b, :velocity, tx + st.ix, ty + st.iy)
+    if (tx*tx + ty*ty) > 0.00001 {
+        val hx, hy = vnormalize(tx, ty)
+        set st.hx = hx
+        set st.hy = hy
+        set st.sx = -hy
+        set st.sy = hx
+    }
+    set st.fx = 0
+    set st.fy = 0
+}
+
+;; As `seek_point(x, y, deceleration, weight)`.
+func seek_point (st, x, y, decel, weight) {
+    val px, py = body_pos(st.b)
+    val tx = x - px
+    val ty = y - py
+    val d = math.sqrt(tx*tx + ty*ty)
+    if d > 0 {
+        val v = math.min(d/((decel || 1)*0.08), st.max_v)
+        val dvx = v*tx/d
+        val dvy = v*ty/d
+        val vx, vy = body_vel(st.b)
+        val w = (weight || 1) * st.turn_multiplier
+        set st.fx += (dvx - vx)*w
+        set st.fy += (dvy - vy)*w
+    }
+}
+
+;; As `wander(rs, distance, jitter, weight)`.
+func wander (st, rs, distance, jitter, weight) {
+    val j = jitter || 20
+    val nx, ny = vnormalize(st.wx + rfloat(-1, 1)*j, st.wy + rfloat(-1, 1)*j)
+    set st.wx = nx * (rs || 40)
+    set st.wy = ny * (rs || 40)
+    val lx = st.wx + (distance || 40)
+    val ly = st.wy
+    val px, py = body_pos(st.b)
+    ;; the target in world space: rotated by (heading, side), translated
+    val gx = st.hx*lx + st.sx*ly + px
+    val gy = st.hy*lx + st.sy*ly + py
+    val w = weight || 1
+    set st.fx += (gx - px)*w
+    set st.fy += (gy - py)*w
+}
+
+;; As `steering_separate(rs, classes, weight)`: away from the others
+;; closer than 2*rs. `others` is a vector of records with `x` and `y`.
+func separate (st, rs, others, weight) {
+    val px, py = body_pos(st.b)
+    var fx, fy = 0, 0
+    loop _, o in others {
+        val dx = px - o.x
+        val dy = py - o.y
+        if ((dx != 0) || (dy != 0)) && (math.sqrt(dx*dx + dy*dy) < 2*rs) {
+            ;; as math.normalize of the original, which skips tiny vectors
+            val nx, ny = if (math.abs(dx) < 0.0001) && (math.abs(dy) < 0.0001) =>
+                (dx, dy) => vnormalize(dx, dy)
+            val l = math.sqrt(nx*nx + ny*ny)
+            set fx += rs*(nx/l)
+            set fy += rs*(ny/l)
+        }
+    }
+    val w = weight || 1
+    set st.fx += fx*w
+    set st.fy += fy*w
+}
+
+;;; ANGLES ;;;
+
+func angle_loop (a) {
+    val t = 2*math.pi
+    a - math.floor(a/t)*t
+}
+
+;; As `math.lerp_angle(value, src, dst)`.
+func lerp_angle (v, src, dst) {
+    var d = angle_loop(dst - src)
+    if d > math.pi {
+        set d -= 2*math.pi
+    }
+    src + d*math.max(0, math.min(1, v))
+}
+
+;; As `rotate_towards_velocity(lerp)`.
+func rotate_towards_velocity (b, lerp) {
+    val vx, vy = body_vel(b)
+    body_set(b, :angle, lerp_angle(lerp, body_angle(b), cmath.atan2(vy, vx)))
+}
+
+;; As `rotate_towards_object(o, lerp)`.
+func rotate_towards_point (b, x, y, lerp) {
+    val px, py = body_pos(b)
+    body_set(b, :angle, lerp_angle(lerp, body_angle(b), cmath.atan2(y - py, x - px)))
+}
