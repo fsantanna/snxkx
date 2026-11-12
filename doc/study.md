@@ -846,3 +846,91 @@ The timings are the original's, measured with the traces of the same
 run (`tools/compare.py`): the first marker of level 1 comes 270 ticks
 after the arena starts in the port, 272 in the original, and its
 enemies 3 ticks earlier, 6 ticks apart in both.
+
+## 10. Elite attacks: phases beside the movement
+
+An elite seeker runs an attack beside its movement: the shooter aims and
+fires bursts of three, the headbutter charges for 2 s and then dashes
+at the leader. The movement must know when the seeker aims instead of
+chasing.
+
+### Lua + LÖVE
+
+```lua
+-- enemies.lua:180-200, the headbutter
+self.last_headbutt_time = 0
+self.t:every(function() return math.distance(self.x, self.y, player.x, player.y) < 76
+                        and love.timer.getTime() - self.last_headbutt_time > 10*n end, function()
+  if self.headbutt_charging or self.headbutting then return end
+  self.headbutt_charging = true
+  self.t:tween(2, self.color, {r = fg[0].r, ...}, math.cubic_in_out, function()
+    self.headbutt_charging = false
+    self.headbutting = true
+    self.last_headbutt_time = love.timer.getTime()
+    self:apply_steering_impulse(300, self:angle_to_object(player), 0.75)
+    self.t:after(0.75, function() self.headbutting = false end)
+  end)
+end)
+
+-- enemies.lua:308-311, in the update
+if self.headbutt_charging or self.shooting then
+  self:set_damping(10); self:rotate_towards_object(player, 0.5)
+elseif not self.headbutting then
+  ...  -- chase
+end
+```
+
+### Atmos
+
+```
+"headbutter" => loop {
+    loop on :clock {
+        val l = A.units@0
+        until l && (math.sqrt((e.x - l.x)*(e.x - l.x) + (e.y - l.y)*(e.y - l.y)) < 76)
+    }
+    set e.aiming += 1
+    await Tween(2, c, [r=f_r, g=f_g, b=f_b], cubic_in_out)
+    set e.aiming -= 1
+    set e.headbutting = true
+    val a = ...             ;; the angle to the leader
+    par :all {
+        await WaitReal(10)
+    } with {
+        await SteeringImpulse(e.st, 300, a, 0.75)
+        set e.headbutting = false
+    }
+}
+```
+
+### Analysis
+
+The attack of the original has three flags and a timestamp:
+`headbutt_charging` and `headbutting` keep the condition of the `every`
+from starting a second attack while one runs (the `return` at its top),
+and `last_headbutt_time` makes the 10 s between attacks. In the port,
+the attack is a loop: a second attack cannot start while one runs,
+because the loop is in the middle of it, and the 10 s is an `await`
+beside the dash (`par :all`), since the original counts it from the
+start of the dash, not from its end.
+
+Two flags remain, read by the movement: whether the seeker aims, and
+whether it dashes. The first became a count (`e.aiming`) shared by the
+attacks that aim, the shooter and the headbutter; the second is read
+also by the contacts, which end a dash on a hit (`src/snake.atm`), as in
+the original. These are the state that one task shows to another, not
+the guards of a phase of its own.
+
+The speed boost of the original is a timestamp (`speed_boosting`) read
+by the update to compute a factor, and a tagged timer that clears it; a
+new boost restarts the timer by its tag. In the port, it is a task per
+seeker (`SpeedBoosts`) that awaits a boost, and a new boost aborts the
+running one (`par :any`). The factor (`e.boost`) remains, for the speed.
+
+The port found a dead line in the original: `buff_def_m = 3` while the
+headbutter charges or dashes (`enemies.lua:267`) is overwritten by
+`buff_def_m = seeping_def_m or 1` before the stats are computed
+(`enemies.lua:283-285`), so it never counts. The port leaves it out.
+It also found a factor it had missed: the update scales the interval of
+the shooter by `1 - min(0.02*level, 0.25)` through the tag of its timer
+(`set_every_multiplier`, `enemies.lua:289-290`); in the port, it is in
+the duration of the `await`.

@@ -28,9 +28,16 @@ a time, in the parts that the port covers, with what became of each one.
 | `Arena.arena_clear_text` (as a flag) | `arena.lua:672` | the clear happens once | gone: as `quitting` |
 | `Arena.start_time` | `arena.lua:206-210` | the countdown, and the HUD reads it | kept as a field for the HUD; the countdown is a loop of three |
 | `Arena.wave` | `arena.lua:205, 217` | the number of the wave, read by the condition of the end and by the HUD | kept as a field for the HUD; the end follows the loop |
+| `Seeker.headbutt_charging` | `enemies.lua:186-191` | no second headbutt while one charges; the seeker aims | gone as a guard: the loop of the attack; the aim is the count `e.aiming` |
+| `Seeker.headbutting` | `enemies.lua:193, 198, 410-432` | the dash: no chasing, and a hit ends it | kept: read by the movement and by the contacts |
+| `Seeker.last_headbutt_time` | `enemies.lua:182, 184, 194` | 10 s between headbutts | gone: `await WaitReal(10)` beside the dash |
+| `Seeker.shooting` | `enemies.lua:222, 308` | the shooter aims instead of chasing | the count `e.aiming` |
+| `Seeker.speed_boosting` (a timestamp, with a tagged timer) | `enemies.lua:269-277, 719-720` | the factor of a speed boost, and its end | gone as a timestamp: a task (`SpeedBoosts`) with the time in a local; the factor `e.boost` remains |
 
-Count so far: 24 variables in the original (counting the nine flags of
-the steering as one), 2 counters and 2 fields for the HUD in the port.
+Count so far: 29 variables in the original (counting the nine flags of
+the steering as one), 2 counters and 2 fields for the HUD in the port,
+and 3 fields that one task shows to another (`aiming`, a count shared by
+two attacks; `headbutting`; `boost`).
 
 The two counters are state, but not a flag guarding a phase: each
 counts tasks that are running, and a task restarts the effect by simply
