@@ -1,0 +1,321 @@
+;; The attacks of the units, as `Player:shoot`, `Player:attack`,
+;; `Projectile`, and `Area` of the original (`player.lua`), for the
+;; characters ported so far.
+
+;;; SHAPES ;;;
+
+;; The corners of a rectangle centered at (x,y), turned by r.
+func rect_corners (x, y, w, h, r) {
+    val c = math.cos(r || 0)
+    val s = math.sin(r || 0)
+    val out = []
+    loop _, p in [[-w/2, -h/2], [w/2, -h/2], [w/2, h/2], [-w/2, h/2]] {
+        set out@+ = [ x + c*p@0 - s*p@1, y + s*p@0 + c*p@1 ]
+    }
+    out
+}
+
+;; Whether two convex polygons (vectors of [x,y]) overlap: no separating
+;; axis among the normals of their edges.
+func polys_overlap (a, b) {
+    var sep = false
+    loop _, poly in [a, b] {
+        val n = #poly
+        loop i in n {
+            val p = poly@(i)
+            val q = poly@((i + 1) % n)
+            val ax = q@1 - p@1
+            val ay = p@0 - q@0
+            var amin, amax = math.huge, -math.huge
+            loop _, v in a {
+                val d = v@0*ax + v@1*ay
+                set amin = math.min(amin, d)
+                set amax = math.max(amax, d)
+            }
+            var bmin, bmax = math.huge, -math.huge
+            loop _, v in b {
+                val d = v@0*ax + v@1*ay
+                set bmin = math.min(bmin, d)
+                set bmax = math.max(bmax, d)
+            }
+            if (amax < bmin) || (bmax < amin) {
+                set sep = true
+            }
+        }
+    }
+    !sep
+}
+
+;; Whether a circle touches the rectangle of a record (x, y, w, h, r).
+func circle_hits (cx, cy, rs, o) {
+    val dx = cx - o.x
+    val dy = cy - o.y
+    val c = math.cos(-(o.r || 0))
+    val s = math.sin(-(o.r || 0))
+    val lx = c*dx - s*dy
+    val ly = s*dx + c*dy
+    val px = math.max(-o.w/2, math.min(o.w/2, lx))
+    val py = math.max(-o.h/2, math.min(o.h/2, ly))
+    ((lx - px)*(lx - px) + (ly - py)*(ly - py)) <= rs*rs
+}
+
+;; The enemies in a circle, as `get_objects_in_shape(Circle(...), enemies)`.
+func enemies_in_circle (A, x, y, rs) {
+    val out = []
+    loop _, e in A.enemies {
+        if circle_hits(x, y, rs, e) {
+            set out@+ = e
+        }
+    }
+    out
+}
+
+;; The closest of the enemies in a circle, or nil.
+func closest_enemy (A, x, y, rs, exclude) {
+    var best = nil
+    var bd = 1000000
+    loop _, e in enemies_in_circle(A, x, y, rs) {
+        if !exclude || X.nin(e, exclude) {
+            val d = math.sqrt((e.x - x)*(e.x - x) + (e.y - y)*(e.y - y))
+            if d < bd {
+                set bd = d
+                set best = e
+            }
+        }
+    }
+    best
+}
+
+;; A random one of the enemies in a circle, avoiding `exclude` (as the
+;; original: up to 20 tries), or nil.
+func random_enemy (A, x, y, rs, exclude) {
+    val es = enemies_in_circle(A, x, y, rs)
+    if #es == 0 {
+        return nil
+    }
+    var e = rtable(es)
+    var tries = 0
+    loop {
+        while exclude && X.xin(e, exclude) && (tries < 20)
+        set e = rtable(es)
+        set tries += 1
+    }
+    e
+}
+
+;;; COOLDOWNS ;;;
+
+;; As `t:cooldown(d, condition, action)` of the original, up to the
+;; action: `d` seconds (times the attack speed of the unit, read in every
+;; tick), and then until there is a target. The bar of the unit shows
+;; the time (`u.cooldown`, from 0 to 1).
+task Cooldown (u, d, ready) {
+    var timer = 0
+    loop us on :clock {
+        set timer += us / 1000000
+        set u.cooldown = math.min(timer / (d*u.aspd_m), 1)
+        until (timer > d*u.aspd_m) && ready()
+    }
+    set u.cooldown = 0
+}
+
+;;; PROJECTILES ;;;
+
+;; As `Projectile`: a rectangle 10x4 that flies at `v` along `r`, hits
+;; the enemies it crosses, and dies on a wall. Options: `pierce` (how many
+;; enemies it crosses), `chain` (how many times it turns to a new enemy),
+;; `ricochet` (how many times it bounces on a wall).
+task Projectile (A, p, fx) {
+    set p.kind = :projectile
+    set p.w = 10
+    set p.h = 4
+    set p.pierce = p.pierce || 0
+    set p.chain = p.chain || 0
+    set p.ricochet = p.ricochet || 0
+    val hit_list = []
+    body(A.w, p, :dynamic, p.x, p.y, :projectile, [:rect, 10, 4])
+    defer {
+        body_free(A.w, p.b)
+    }
+    spawn {
+        loop on :draw {
+            eng.push(p.x, p.y, p.r)
+            eng.rect(p.x, p.y, 10, 4, 2, 2, p.color)
+            eng.pop()
+        }
+    }
+    val dx, dy, n = par :any {
+        ;; flies
+        loop on :clock {
+            set p.x, p.y = body_pos(p.b)
+            body_set(p.b, :angle, p.r)
+            body_set(p.b, :velocity, p.v*math.cos(p.r), p.v*math.sin(p.r))
+        }
+    } with {
+        ;; hits the enemies it crosses, until it cannot cross more
+        loop e on :trigger.enter until (it.b == p.b) && (it.other.kind == :enemy) {
+            val o = e.other
+            if (p.pierce <= 0) && (p.chain <= 0) {
+                hit(o, p.dmg, [projectile=p])
+                projectile_sound(p.character)
+                break (p.x, p.y, rint(2, 3))
+            }
+            if p.pierce > 0 {
+                set p.pierce -= 1
+            }
+            if p.chain > 0 {
+                set p.chain -= 1
+                set hit_list@+ = o
+                val t = random_enemy(A, p.x, p.y, 48, hit_list)
+                if t {
+                    set p.r = cmath.atan2(t.y - p.y, t.x - p.x)
+                    set p.v = p.v*1.25
+                    if (p.level == 3) && (p.character == "scout") {
+                        set p.dmg = p.dmg*1.25
+                    }
+                }
+            }
+            spawn @fx HitCircle(p.x, p.y, [rs=6, color=fg@0, duration=0.1])
+            spawn @fx HitParticle(p.x, p.y, [color=p.color])
+            spawn @fx HitParticle(p.x, p.y, [color=o.color])
+            projectile_sound(p.character)
+            hit(o, p.dmg, [projectile=p])
+        }
+    } with {
+        ;; dies on a wall, or bounces
+        loop e on :collision.enter until (it.b == p.b) && (it.other.kind == :wall) {
+            ifs {
+                (p.character == "archer") && (p.ricochet > 0) => {
+                    bounce(p, e.nx, e.ny)
+                    set p.ricochet -= 1
+                    play(rtable([arrow_hit_wall1, arrow_hit_wall2]), [pitch=rfloat(0.9, 1.1), volume=0.2])
+                }
+                p.character == "archer" => {
+                    play(rtable([arrow_hit_wall1, arrow_hit_wall2]), [pitch=rfloat(0.9, 1.1), volume=0.2])
+                    break (e.x, e.y, 0)
+                }
+                (p.character == "scout") || (p.character == "outlaw") => {
+                    play(knife_hit_wall1, [pitch=rfloat(0.9, 1.1), volume=0.2])
+                    break (e.x, e.y, 0)
+                }
+                p.character == "wizard" => {
+                    play(magic_area1, [pitch=rfloat(0.95, 1.05), volume=0.075])
+                    break (e.x, e.y, rint(2, 3))
+                }
+                else => {
+                    play(proj_hit_wall1, [pitch=rfloat(0.9, 1.1), volume=0.2])
+                    break (e.x, e.y, rint(2, 3))
+                }
+            }
+        }
+    }
+    ;; as `Projectile:die`
+    loop _ in n {
+        spawn @fx HitParticle(dx, dy, [r=rfloat(0, 2*math.pi), color=p.color])
+    }
+    spawn @fx HitCircle(dx, dy, [scale_down=true])
+    if p.character == "wizard" {
+        spawn @fx Area(A, [x=p.x, y=p.y, r=p.r, w=p.parent.area_size_m*24, color=p.color,
+                           dmg=p.parent.area_dmg_m*p.dmg, character="wizard"], fx)
+    }
+}
+
+;; The sound of a projectile that hits an enemy.
+func projectile_sound (c) {
+    ifs {
+        X.xin(c, ["archer", "scout", "outlaw", "sentry"]) =>
+            play(hit2, [pitch=rfloat(0.95, 1.05), volume=0.35])
+        c == "wizard" =>
+            play(magic_area1, [pitch=rfloat(0.95, 1.05), volume=0.15])
+        else =>
+            play(hit3, [pitch=rfloat(0.95, 1.05), volume=0.35])
+    }
+}
+
+;;; AREAS ;;;
+
+;; As `Area`: a square that hits the enemies under it at once, and then
+;; shows for a moment and blinks away.
+task Area (A, a, fx) {
+    val w = a.w
+    val shape = rect_corners(a.x, a.y, 1.5*w, 1.5*w, a.r)
+    val es = []
+    loop _, e in A.enemies {
+        if polys_overlap(shape, rect_corners(e.x, e.y, e.w, e.h, e.r)) {
+            set es@+ = e
+        }
+    }
+    loop _, e in es {
+        val dmg = if a.character == "swordsman" => (a.dmg + a.dmg*0.15*#es) => a.dmg
+        hit(e, dmg, [area=a])
+        spawn @fx HitCircle(e.x, e.y, [rs=6, color=fg@0, duration=0.1])
+        spawn @fx HitParticle(e.x, e.y, [color=a.color])
+        spawn @fx HitParticle(e.x, e.y, [color=e.color])
+        ifs {
+            X.xin(a.character, ["wizard", "magician"]) =>
+                play(magic_hit1, [pitch=rfloat(0.95, 1.05), volume=0.5])
+            a.character == "swordsman" =>
+                play(hit2, [pitch=rfloat(0.95, 1.05), volume=0.35])
+        }
+    }
+    val st = [ w=0, color=fg@0 ]
+    val faint = alpha(a.color, 0.08)
+    val s = spring(1)
+    spawn Springs(s)
+    var shown = true
+    spawn {
+        loop on :draw {
+            if shown {
+                eng.push(a.x, a.y, a.r, s.x)
+                val h = st.w/2
+                val t = st.w/10
+                val x1 = a.x - h
+                val y1 = a.y - h
+                val x2 = a.x + h
+                val y2 = a.y + h
+                val lw = remap(h, 32, 256, 2, 4)
+                eng.polyline([x1, y1 + t, x1, y1, x1 + t, y1], st.color, lw)
+                eng.polyline([x2 - t, y1, x2, y1, x2, y1 + t], st.color, lw)
+                eng.polyline([x2 - t, y2, x2, y2, x2, y2 - t], st.color, lw)
+                eng.polyline([x1, y2 - t, x1, y2, x1 + t, y2], st.color, lw)
+                eng.rect((x1 + x2)/2, (y1 + y2)/2, x2 - x1, y2 - y1, nil, nil, faint)
+                eng.pop()
+            }
+        }
+    }
+    spawn {
+        await Tween(0.05, st, [w=w], cubic_in_out)
+        spring_pull(s, 0.15)
+    }
+    await 200ms
+    set st.color = a.color
+    ;; blinks 7 times, as `every_immediate(0.05, ..., 7)`
+    loop i in 7 {
+        if i > 0 {
+            await 50ms
+        }
+        set shown = !shown
+    }
+}
+
+;;; SHOOTING ;;;
+
+;; As `Player:shoot(r, mods)`: projectiles from the unit along `r`.
+func shoot_args (u, r, mods) {
+    [
+        x = u.x + 1.6*9*math.cos(r), y = u.y + 1.6*9*math.sin(r),
+        v = 250, r = r, color = u.color, dmg = u.dmg, character = u.character,
+        parent = u, level = u.level,
+    ] ++ (mods || [])
+}
+
+;; The sound of a shot.
+func shoot_sound (c) {
+    ifs {
+        c == "vagrant" => play(shoot1, [pitch=rfloat(0.95, 1.05), volume=0.2])
+        c == "archer"  => play(archer1, [pitch=rfloat(0.95, 1.05), volume=0.35])
+        c == "wizard"  => play(wizard1, [pitch=rfloat(0.95, 1.05), volume=0.15])
+        X.xin(c, ["scout", "outlaw"]) =>
+            play(rtable([scout1, scout2]), [pitch=rfloat(0.95, 1.05), volume=0.35])
+    }
+}
