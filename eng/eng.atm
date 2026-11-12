@@ -224,6 +224,11 @@ func stop (inst) {
     `eg_snd_stop(eg_int($inst));`
 }
 
+;; The volume of an instance that plays.
+func set_volume (inst, v) {
+    `eg_snd_volume(eg_int($inst), eg_dbl($v));`
+}
+
 func sound_len (snd) {
     val i = snd.i
     `:number.float eg_snd_len(eg_int($i))`

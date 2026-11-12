@@ -2,47 +2,48 @@
 113	go	buy_screen
 573	go	arena
 812	wave	1
-842	add	SpawnMarker 80.0 135.0
-922	add	Seeker 68.0 123.0
-928	add	Seeker 92.0 123.0
-934	add	Seeker 92.0 147.0
-940	add	Seeker 68.0 147.0
-946	add	Seeker 80.0 135.0
-952	add	Seeker 68.0 123.0
-958	add	Seeker 92.0 123.0
-964	add	Seeker 92.0 147.0
-975	enemy.die	seeker
-975	enemy.die	seeker
-975	enemy.die	seeker
-975	enemy.die	seeker
-975	enemy.die	seeker
-1023	unit.hit	swordsman 136.6
-1061	enemy.die	seeker
-1061	unit.hit	swordsman 133.1
-1089	unit.hit	swordsman 129.7
-1100	unit.hit	swordsman 126.3
-1111	enemy.die	seeker
-1111	unit.hit	swordsman 122.9
-1318	enemy.die	seeker
-1318	wave	2
-1348	add	SpawnMarker 240.0 135.0
-1428	add	Seeker 228.0 123.0
-1434	add	Seeker 252.0 123.0
-1440	add	Seeker 252.0 147.0
-1446	add	Seeker 228.0 147.0
-1452	add	Seeker 240.0 135.0
-1458	add	Seeker 228.0 123.0
-1470	add	Seeker 252.0 147.0
-1476	add	Seeker 228.0 147.0
-1482	add	Seeker 240.0 135.0
-1518	enemy.die	seeker
-1518	enemy.die	seeker
-1518	enemy.die	seeker
-1518	enemy.die	seeker
-1518	enemy.die	seeker
-1518	enemy.die	seeker
-1518	enemy.die	seeker
-1518	enemy.die	seeker
-1518	enemy.die	seeker
-1518	clear	1
-1751	go	buy_screen
+842	add	SpawnMarker 240.0 135.0
+922	add	Seeker 228.0 123.0
+928	add	Seeker 252.0 123.0
+934	add	Seeker 252.0 147.0
+940	add	Seeker 228.0 147.0
+946	add	Seeker 240.0 135.0
+952	add	Seeker 228.0 123.0
+958	add	Seeker 252.0 123.0
+964	add	Seeker 252.0 147.0
+1124	enemy.die	seeker
+1124	enemy.die	seeker
+1124	enemy.die	seeker
+1124	enemy.die	seeker
+1124	enemy.die	seeker
+1124	enemy.die	seeker
+1124	enemy.die	seeker
+1185	unit.hit	swordsman 136.6
+1481	enemy.die	seeker
+1481	wave	2
+1511	add	SpawnMarker 240.0 135.0
+1591	add	Seeker 228.0 123.0
+1597	add	Seeker 252.0 123.0
+1603	add	Seeker 252.0 147.0
+1609	add	Seeker 228.0 147.0
+1615	add	Seeker 240.0 135.0
+1621	add	Seeker 228.0 123.0
+1627	add	Seeker 252.0 123.0
+1633	add	Seeker 252.0 147.0
+1639	add	Seeker 228.0 147.0
+1645	add	Seeker 240.0 135.0
+1682	enemy.die	seeker
+1682	enemy.die	seeker
+1682	enemy.die	seeker
+1682	enemy.die	seeker
+1819	unit.hit	swordsman 133.1
+1821	unit.hit	swordsman 129.7
+1825	enemy.die	seeker
+1841	enemy.die	seeker
+1841	unit.hit	swordsman 126.3
+1883	enemy.die	seeker
+1883	enemy.die	seeker
+1883	enemy.die	seeker
+2101	enemy.die	seeker
+2101	clear	1
+2334	go	buy_screen

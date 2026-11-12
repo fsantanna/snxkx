@@ -210,6 +210,12 @@ task Arena (A, enemies) {
         await :Arena.died
         :died
     } with {
+        ;; the options, while the level is being played
+        if !A.menu {
+            await Pause(:arena)
+        }
+        await(false)
+    } with {
         ifs {
             A.menu => await(false)
             enemies => {

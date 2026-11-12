@@ -7,6 +7,7 @@
 ;;     ng_max 1                        level 3
 ;;     ng 0                            loop 0
 ;;     dark_transitions false          gold 10
+;;     screen_shake true ...
 ;;                                     shop 1 2          (level, xp)
 ;;                                     locked true archer - wizard
 ;;                                     unit vagrant 1 0 0  (level, reserve)
@@ -45,6 +46,9 @@ func state_save () {
         "ng_max " ++ tostring(STATE.ng_max),
         "ng " ++ tostring(STATE.ng),
         "dark_transitions " ++ tostring(STATE.dark_transitions),
+        "screen_shake " ++ tostring(STATE.screen_shake),
+        "sfx_volume " ++ tostring(STATE.sfx_volume),
+        "music_volume " ++ tostring(STATE.music_volume),
     ])
 }
 
@@ -54,8 +58,13 @@ func state_load () {
             "ng_max" => set STATE.ng_max = tonumber(w@1)
             "ng" => set STATE.ng = tonumber(w@1)
             "dark_transitions" => set STATE.dark_transitions = w@1 == "true"
+            "screen_shake" => set STATE.screen_shake = w@1 == "true"
+            "sfx_volume" => set STATE.sfx_volume = tonumber(w@1)
+            "music_volume" => set STATE.music_volume = tonumber(w@1)
         }
     }
+    set VOLUME.sfx = STATE.sfx_volume
+    set VOLUME.music = STATE.music_volume
 }
 
 func run_save (run) {

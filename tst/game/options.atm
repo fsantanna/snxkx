@@ -1,0 +1,25 @@
+;; The options in the arena: Escape opens them and stops the game, a click
+;; raises the volume of the sounds, another turns dark transitions on, and
+;; Escape closes them.
+include "../../src/game.atm"
+spawn Background()
+spawn Camera()
+spawn SlowMotion()
+spawn Input()
+
+val run = [ level=1, loop=0, gold=3, units=[ ["vagrant", 1] ], passives=[], pool=[] ]
+val A = new_arena(1)
+set A.run = run
+spawn Arena(A)
+spawn {
+    await :key.dn until it.name == "Escape"
+    val t0 = A.time
+    loop _ in 60 {
+        await :tick
+    }
+    print("paused: game time in 1s of real time", string.format("%.3f", A.time - t0))
+}
+loop _ in 240 {
+    await :tick
+}
+print("sfx", VOLUME.sfx, "dark", STATE.dark_transitions)

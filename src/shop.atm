@@ -629,6 +629,7 @@ task Shop (run) {
     spawn @bs Button(task, :restart, W/2 + 148, 18, "R")
 
     run_save(run)
+    spawn Pause(:shop)
     val coins = func () {
         play(rtable([coins1, coins2, coins3]), [pitch=rfloat(0.95, 1.05), volume=0.5])
     }

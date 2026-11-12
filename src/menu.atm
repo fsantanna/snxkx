@@ -61,8 +61,9 @@ task Menu () {
     }
 
     loop {
-        val e = await :Button.click
-        match e.id {
+        val e = await <:Button.click || :key.dn>
+        val id = if e ?? :key.dn => (if e.name == "Escape" => :options => nil) => e.id
+        match id {
             :arena_run => {
                 play(ui_transition2, [pitch=rfloat(0.95, 1.05), volume=0.5])
                 play(ui_switch2, [pitch=rfloat(0.95, 1.05), volume=0.5])
@@ -80,7 +81,11 @@ task Menu () {
                 spring_pull(e.spring, 0.2, 200, 10)
                 play(ui_switch1, [pitch=rfloat(0.95, 1.05), volume=0.5])
             }
-            else => nil     ;; options: the pause menu comes later
+            :options => {
+                play(ui_switch1, [pitch=rfloat(0.95, 1.05), volume=0.5])
+                await Options(:menu)
+            }
+            else => nil
         }
     }
 }

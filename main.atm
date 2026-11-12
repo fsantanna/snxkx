@@ -15,7 +15,42 @@ task Play (run) {
     await Arena(A)
 }
 
+;; The music, as `main_song_instance` of the original: a random song of
+;; the five, louder in the menu and the arena (0.5, in 2s) than in the
+;; shop (0.2, in 1s), and another one when it ends. A restart stops it.
+task Music () {
+    val st = [ v=0.5 ]
+    spawn {
+        var e = await :Music
+        loop {
+            set e = par :any {
+                await TweenReal(e.d, st, [v=e.v], linear)
+                await(false)
+            } with {
+                await :Music
+            }
+        }
+    }
+    loop {
+        val song = rtable([song1, song2, song3, song4, song5])
+        val inst = play(song, [volume=st.v])
+        if inst < 0 {
+            await(false)        ;; no sound (SNX_MUTE): one song, as at the start
+        }
+        par :any {
+            loop on :tick {
+                set_volume(inst, st.v*VOLUME.music)
+                until !playing(inst)
+            }
+        } with {
+            await :Music.stop
+            stop(inst)
+        }
+    }
+}
+
 spawn Background()
+spawn Music()
 spawn Camera()
 spawn Input()
 spawn SlowMotion()
@@ -31,13 +66,21 @@ par {
             trace("go", screen@2)
             pin s = spawn (screen@0)(screen@1)
             val e = await <:goto || s>
-            if e == :quit {
+            if (e == :quit) || ((e ?? :goto) && (e.screen == :quit)) {
                 break
             }
             await :covered
             e
         }
         eng.slow(1)
+        match next.screen {
+            :buy_screen => emit @:global :Music [ v=0.2, d=1 ]
+            :restart => {
+                emit @:global :Music.stop
+                emit @:global :Music [ v=0.2, d=1 ]
+            }
+            else => emit @:global :Music [ v=0.5, d=2 ]
+        }
         set screen = match next.screen {
             :buy_screen => do {
                 if next.counting {
@@ -69,6 +112,8 @@ par {
 } with {
     ;; the transitions, over the screens
     loop e on :goto {
-        await Transition(e)
+        if e.screen != :quit {
+            await Transition(e)
+        }
     }
 }

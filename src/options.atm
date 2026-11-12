@@ -1,0 +1,146 @@
+;; The options, with the game paused (`open_options` and `close_options`
+;; of `main.lua:1844-2105`): a modal with buttons, opened and closed with
+;; Escape. The options that change what the port has: the volumes of the
+;; sounds and of the music, dark transitions, screen shake, the new game
+;; plus (in the menu), a restart of the run, the menu, and quit. Left
+;; out: mouse control, the run timer, the size of the window, and the
+;; cooldowns and the arrow drawn on the snake.
+
+;; The text of an option.
+func onoff (b) {
+    if b => "yes" => "no"
+}
+
+;; A volume one step up (from 1 back to 0), or down (from 0 to 1).
+func volume_step (v, down) {
+    val n = math.floor(v*10 + 0.5) + (if down => -1 => 1)
+    ifs {
+        n > 10 => 0
+        n < 0 => 1
+        else => n/10
+    }
+}
+
+;; The game time follows `st.v` while the options are open.
+task PauseTime (st) {
+    loop on :tick {
+        eng.slow(st.v)
+    }
+}
+
+;; The new game plus in play, in the menu.
+task NgText () {
+    loop on :draw {
+        text_draw(shop_text("[bg10]current: " ++ tostring(STATE.ng)), W/2 + 63, H - 50)
+    }
+}
+
+;; Options from the menu (`kind` :menu), the shop (:shop), or the arena
+;; (:arena). It ends on resume; restart, the menu, and quit go to their
+;; screens (`:goto`).
+task Options (kind) {
+    pin ps = tasks()
+    spawn @ps Modal()
+    ;; the game stops in 0.25s, and comes back in 0.25s
+    val st = [ v=1 ]
+    spawn @ps PauseTime(st)
+    spawn @ps TweenReal(0.25, st, [v=0], linear)
+    if kind == :arena {
+        spawn @ps Text2(W/2, H/2 - 108, text([ [text="[bg10]<-, a or m1       ->, d or m2", font=fat_font, alignment=:center] ]), 0.6, 0.6)
+        spawn @ps Text2(W/2, H/2 - 92, text([ [text="[bg10]turn left                                            turn right", font=pixul_font, alignment=:center] ]))
+    }
+    val me = task
+    val label = func (id) {
+        match id {
+            :resume => if kind == :menu => "main menu (esc)" => "resume game (esc)"
+            :restart => "restart run (r)"
+            :sfx => "sfx volume: " ++ tostring(math.floor(VOLUME.sfx*10 + 0.5))
+            :music => "music volume: " ++ tostring(math.floor(VOLUME.music*10 + 0.5))
+            :dark => "dark transitions: " ++ onoff(STATE.dark_transitions)
+            :shake => "screen shake: " ++ onoff(STATE.screen_shake != false)
+            :ng_down => "NG+ down"
+            :ng_up => "NG+ up"
+            :menu => "main menu"
+            else => "quit"
+        }
+    }
+    val places = [
+        [:resume, W/2, H - 225], [:sfx, W/2 - 46, H - 175], [:music, W/2 + 48, H - 175],
+        [:dark, W/2 + 13, H - 150], [:shake, W/2 - 57, H - 100], [:quit, W/2, H - 25],
+    ]
+    if kind == :menu {
+        set places@+ = [:ng_down, W/2 - 58, H - 50]
+        set places@+ = [:ng_up, W/2 + 5, H - 50]
+        spawn @ps NgText()
+    } else {
+        set places@+ = [:restart, W/2, H - 200]
+        set places@+ = [:menu, W/2, H - 50]
+    }
+    ;; the buttons are made again when their texts change
+    spawn {
+        loop {
+            do {
+                pin bs = tasks()
+                loop _, p in places {
+                    spawn @bs Button(me, p@0, p@1, p@2, label(p@0))
+                }
+                await :Options.changed
+            }
+        }
+    }
+    loop {
+        val e = await <:Button.click || :key.dn>
+        val id = if e ?? :key.dn => (match e.name { "Escape" => :resume ; "R" => (if kind == :menu => nil => :restart) ; else => nil }) => e.id
+        if id {
+            play(ui_switch2, [pitch=rfloat(0.95, 1.05), volume=0.5])
+            if e.spring {
+                spring_pull(e.spring, 0.2, 200, 10)
+            }
+            play(ui_switch1, [pitch=rfloat(0.95, 1.05), volume=0.5])
+        }
+        until id == :resume
+        match id {
+            :sfx => {
+                set VOLUME.sfx = volume_step(VOLUME.sfx, e.but == 3)
+                set STATE.sfx_volume = VOLUME.sfx
+            }
+            :music => {
+                set VOLUME.music = volume_step(VOLUME.music, e.but == 3)
+                set STATE.music_volume = VOLUME.music
+            }
+            :dark => set STATE.dark_transitions = !STATE.dark_transitions
+            :shake => set STATE.screen_shake = !(STATE.screen_shake != false)
+            :ng_down => set STATE.ng = math.max(0, math.min(STATE.ng - 1, 5))
+            :ng_up => set STATE.ng = math.max(0, math.min(STATE.ng + 1, STATE.ng_max))
+            :restart => {
+                play(ui_transition2, [pitch=rfloat(0.95, 1.05), volume=0.5])
+                state_save()
+                emit @:global :goto [ screen=:restart, x=W/2, y=H/2, color=fg@0, text="[wavy, bg]restarting..." ]
+                await(false)
+            }
+            :menu => {
+                play(ui_transition2, [pitch=rfloat(0.95, 1.05), volume=0.5])
+                state_save()
+                emit @:global :goto [ screen=:menu, x=W/2, y=H/2, color=fg@0, text="[wavy, bg].." ]
+                await(false)
+            }
+            :quit => {
+                state_save()
+                emit @:global :goto [ screen=:quit ]
+                await(false)
+            }
+        }
+        state_save()
+        emit @me :Options.changed
+    }
+    await TweenReal(0.25, st, [v=1], linear)
+}
+
+;; Escape opens the options, and Escape (or resume) closes them.
+task Pause (kind) {
+    loop {
+        await :key.dn until it.name == "Escape"
+        play(ui_switch1, [pitch=rfloat(0.95, 1.05), volume=0.5])
+        await Options(kind)
+    }
+}

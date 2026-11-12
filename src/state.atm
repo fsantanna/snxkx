@@ -5,4 +5,7 @@ val STATE = [
     ng_max = 0,         ;; new_game_plus
     ng = 0,             ;; current_new_game_plus
     dark_transitions = false,
+    screen_shake = true,
+    sfx_volume = 0.5,
+    music_volume = 0.5,
 ]

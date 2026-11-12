@@ -15,6 +15,9 @@ val CAM = [
 
 ;; As `camera:shake(intensity, duration, frequency)`.
 func shake (intensity, duration, frequency) {
+    if STATE.screen_shake == false {
+        return nil
+    }
     val f = frequency || 60
     val d = 1000*(duration || 0)
     val xs = []
@@ -30,6 +33,9 @@ func shake (intensity, duration, frequency) {
 
 ;; As `camera:spring_shake(intensity, r, k, d)`.
 func spring_shake (intensity, r, k, d) {
+    if STATE.screen_shake == false {
+        return nil
+    }
     spring_pull(CAM.sx, -intensity*math.cos(r || 0), k, d)
     spring_pull(CAM.sy, -intensity*math.sin(r || 0), k, d)
 }

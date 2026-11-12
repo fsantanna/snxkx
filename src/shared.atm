@@ -86,6 +86,20 @@ task Stars () {
 
 ;;; TRANSITION ;;;
 
+;; The tag of the color of a text of a transition, `bg`, as `fg` with dark
+;; transitions.
+func dark_text (s) {
+    if !STATE.dark_transitions {
+        return s
+    }
+    val i = string.find(s, ", bg]")
+    if i {
+        string.sub(s, 0, i - 1) ++ ", fg]" ++ string.sub(s, i + 5, #s - 1)
+    } else {
+        s
+    }
+}
+
 ;; As `TransitionEffect`: a circle grows from (e.x, e.y) until it covers
 ;; the screen, with a text that pops in the center (`e.text`, a string,
 ;; or `e.lines`). Then it emits :covered, so that the screen below
@@ -95,10 +109,12 @@ task Stars () {
 ;; the original: the game may be slowed down or stopped below it.
 task Transition (e) {
     val st = [ x=e.x, y=e.y, rs=0, ts=0 ]
-    val t = text(e.lines || [ [text=e.text, font=pixul_font, alignment=:center] ])
+    ;; dark transitions: a dark circle, and a light text
+    val color = if STATE.dark_transitions => bg@(-2) => e.color
+    val t = text(e.lines || [ [text=dark_text(e.text || ""), font=pixul_font, alignment=:center] ])
     spawn {
         loop on :draw {
-            eng.circle(st.x, st.y, st.rs, e.color)
+            eng.circle(st.x, st.y, st.rs, color)
             text_draw(t, W/2, H/2, 0, st.ts, st.ts)
         }
     }
