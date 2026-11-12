@@ -1,0 +1,3 @@
+SNX_FRAMES=4000
+SNX_TRACE=1
+SNX_SHOT=300:$OUT/game-level.0.png

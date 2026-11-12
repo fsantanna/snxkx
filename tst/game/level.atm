@@ -1,0 +1,17 @@
+;; Level 1 by itself: the countdown, its two waves, and the end, with a
+;; strong snake and no input (the seekers chase it into its units).
+include "../../src/game.atm"
+
+spawn Background()
+spawn Camera()
+spawn Input()
+spawn SlowMotion()
+
+val run = [ level=1, loop=0, gold=3,
+            units=[["vagrant", 3], ["vagrant", 3], ["vagrant", 3], ["vagrant", 3]] ]
+val A = new_arena(1)
+set A.run = run
+spawn Arena(A)
+val e = await :goto
+print(eng.tick(), e.screen, run.gold, A.gold_gained, A.interest)
+await 1s        ;; (doc/compiler.md, 5)
