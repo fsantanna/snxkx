@@ -1,48 +1,43 @@
 240	wave	1
-270	add	SpawnMarker 80.0 135.0
-350	add	Seeker 68.0 123.0
-353	enemy.die	seeker
-356	add	Seeker 92.0 123.0
-380	add	Seeker 68.0 123.0
-386	add	Seeker 92.0 123.0
-396	enemy.die	seeker
-396	unit.hit	vagrant 596.0
-428	enemy.die	seeker
-484	add	SpawnMarker 80.0 59.0
-486	add	SpawnMarker 400.0 59.0
-488	add	SpawnMarker 400.0 211.0
-491	add	SpawnMarker 80.0 211.0
-564	add	Seeker 68.0 47.0
-566	add	Seeker 388.0 47.0
-568	add	Seeker 388.0 199.0
-570	add	Seeker 68.0 199.0
-575	enemy.die	seeker
-656	enemy.die	seeker
-724	enemy.die	seeker
-800	enemy.die	seeker
-881	enemy.die	seeker
-881	wave	2
-911	add	SpawnMarker 400.0 135.0
-991	add	Seeker 388.0 123.0
-997	add	Seeker 412.0 123.0
-1003	add	Seeker 412.0 147.0
-1009	add	Seeker 388.0 147.0
-1015	add	Seeker 400.0 135.0
-1019	enemy.die	seeker
-1021	add	Seeker 388.0 123.0
-1027	add	Seeker 412.0 123.0
-1029	enemy.die	seeker
-1033	add	Seeker 412.0 147.0
-1038	enemy.die	seeker
-1047	enemy.die	seeker
-1047	unit.hit	vagrant 596.0
-1057	enemy.die	seeker
-1057	unit.hit	vagrant 592.0
-1064	enemy.die	seeker
-1064	unit.hit	vagrant 588.0
-1068	enemy.die	seeker
-1068	unit.hit	vagrant 584.0
-1074	enemy.die	seeker
-1074	clear	1
-1074	unit.hit	vagrant 580.0
-1255	buy_screen	6	3	0
+270	add	SpawnMarker 240.0 135.0
+350	add	Seeker 228.0 123.0
+356	add	Seeker 252.0 123.0
+362	add	Seeker 252.0 147.0
+368	add	Seeker 228.0 147.0
+374	add	Seeker 240.0 135.0
+380	add	Seeker 228.0 123.0
+386	add	Seeker 252.0 123.0
+392	add	Seeker 252.0 147.0
+419	enemy.die	seeker
+431	enemy.die	seeker
+433	enemy.die	seeker
+441	enemy.die	seeker
+441	enemy.die	seeker
+453	enemy.die	seeker
+453	unit.hit	vagrant 596.0
+457	enemy.die	seeker
+477	enemy.die	seeker
+477	wave	2
+477	unit.hit	vagrant 596.0
+507	add	SpawnMarker 240.0 135.0
+587	add	Seeker 228.0 123.0
+593	add	Seeker 252.0 123.0
+599	add	Seeker 252.0 147.0
+605	add	Seeker 228.0 147.0
+617	add	Seeker 228.0 123.0
+623	add	Seeker 252.0 123.0
+629	add	Seeker 252.0 147.0
+635	add	Seeker 228.0 147.0
+641	add	Seeker 240.0 135.0
+658	enemy.die	seeker
+665	enemy.die	seeker
+674	enemy.die	seeker
+675	enemy.die	seeker
+676	enemy.die	seeker
+676	enemy.die	seeker
+686	enemy.die	seeker
+690	enemy.die	seeker
+711	enemy.die	seeker
+711	clear	1
+711	unit.hit	vagrant 592.0
+892	buy_screen	6	3	0

@@ -1,0 +1,16 @@
+;; The characters that shoot, beyond the first ten: their projectiles and
+;; their summons (pets, critters, automatons), in a level 3 arena.
+include "../../src/game.atm"
+spawn Background()
+spawn Camera()
+spawn SlowMotion()
+
+val run = [ level=3, loop=0, gold=3, units=[
+    ["thief", 3], ["blade", 3], ["sage", 3], ["cannoneer", 3], ["dual_gunner", 3],
+    ["spellblade", 3], ["lich", 3], ["corruptor", 3], ["beastmaster", 3], ["assassin", 1],
+    ["barrager", 3], ["arcanist", 3], ["artificer", 3],
+] ]
+val A = new_arena(3)
+set A.run = run
+spawn Arena(A)
+await(false)

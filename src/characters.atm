@@ -36,20 +36,72 @@ task Shoot (A, u, r, mods, fx, shots) {
             set A.gold_picked_up += 1
         }
     }
-    val o = [ dmg=u.dmg*dmg_m, crit=crit ] ++ (mods || [])
-    spawn @fx HitCircle(u.x + 0.8*9*math.cos(r), u.y + 0.8*9*math.sin(r), [rs=6])
-    if u.character == "outlaw" {
-        var a = r - 2*math.pi/8
-        loop _ in 5 {
-            spawn @shots Projectile(A, shoot_args(u, a, o), fx)
-            set a += math.pi/8
+    if crit && mods && mods.spawn_critters_on_crit {
+        play(critter1, [pitch=rfloat(0.95, 1.05), volume=0.5])
+        loop _ in mods.spawn_critters_on_crit {
+            spawn @shots Critter(A, u.x, u.y, rfloat(0, 2*math.pi), 10, u.dmg, u, fx)
         }
-    } else {
-        spawn @shots Projectile(A, shoot_args(u, r, o), fx)
+    }
+    val o = [ dmg=u.dmg*dmg_m, crit=crit ] ++ (mods || [])
+    match u.character {
+        "outlaw" => {
+            spawn @fx HitCircle(u.x + 0.8*9*math.cos(r), u.y + 0.8*9*math.sin(r), [rs=6])
+            var a = r - 2*math.pi/8
+            loop _ in 5 {
+                spawn @shots Projectile(A, shoot_args(u, a, o), fx)
+                set a += math.pi/8
+            }
+        }
+        "blade" => {
+            ;; a knife at each enemy around
+            loop _, e in enemies_in_circle(A, u.x, u.y, 64) {
+                val a = angle_to(u, e.x, e.y)
+                spawn @fx HitCircle(u.x + 0.8*9*math.cos(a), u.y + 0.8*9*math.sin(a), [rs=6])
+                spawn @shots Projectile(A, shoot_args(u, a, o), fx)
+            }
+        }
+        "sage" => {
+            spawn @fx HitCircle(u.x + 0.8*9*math.cos(r), u.y + 0.8*9*math.sin(r), [rs=6])
+            spawn @shots Projectile(A, shoot_args(u, r, [v=25, dmg=u.dmg, pierce=1000] ++ (mods || [])), fx)
+        }
+        "dual_gunner" => {
+            loop _, side in [-math.pi/2, math.pi/2] {
+                spawn @fx HitCircle(u.x + 0.8*9*math.cos(r) + 4*math.cos(r + side), u.y + 0.8*9*math.sin(r) + 4*math.sin(r + side), [rs=6])
+                spawn @shots Projectile(A, shoot_args(u, r, [v=300] ++ o) ++ [
+                    x = u.x + 1.6*9*math.cos(r) + 4*math.cos(r + side),
+                    y = u.y + 1.6*9*math.sin(r) + 4*math.sin(r + side) ], fx)
+            }
+            set u.dg_counter = (u.dg_counter || 0) + 1
+            if (u.dg_counter == 5) && (u.level == 3) {
+                set u.dg_counter = 0
+                spawn @shots GunKata(A, u, r, mods, fx, shots)
+            }
+        }
+        else => {
+            spawn @fx HitCircle(u.x + 0.8*9*math.cos(r), u.y + 0.8*9*math.sin(r), [rs=6])
+            spawn @shots Projectile(A, shoot_args(u, r, o), fx)
+        }
     }
     shoot_sound(u.character)
     if u.chance_to_barrage && rbool(u.chance_to_barrage) {
         await Barrage(A, u, r, 3, [], fx, shots)
+    }
+}
+
+;; The gun kata of the dual gunner of level 3, every fifth shot: 20 shots
+;; at random enemies around, 0.1s apart (`every(0.1, ..., 20)`).
+task GunKata (A, u, r, mods, fx, shots) {
+    loop _ in 20 {
+        await 100ms
+        val e = random_enemy(A, u.x, u.y, 96)
+        if e {
+            play(rtable([gun_kata1, gun_kata2]), [pitch=rfloat(0.95, 1.05), volume=0.35])
+            spring_shake(2, r)
+            spawn @fx HfxUse(u.shoot, 0.25)
+            val a = angle_to(u, e.x, e.y)
+            spawn @fx HitCircle(u.x + 0.8*9*math.cos(a) + 4*math.cos(a - math.pi/2), u.y + 0.8*9*math.sin(a) + 4*math.sin(a - math.pi/2), [rs=6])
+            spawn @shots Projectile(A, shoot_args(u, a, [v=300] ++ (mods || [])), fx)
+        }
     }
 }
 
@@ -236,7 +288,7 @@ task Character (A, u, fx, shots) {
         "outlaw" => loop {
             await Cooldown(u, 3, \{ near(96) })
             val e = closest_enemy(A, u.x, u.y, 96)
-            if e { spawn @acts Shoot(A, u, toward(e), [], fx, shots) }
+            if e { spawn @acts Shoot(A, u, toward(e), [homing=(u.level == 3)], fx, shots) }
         }
         "wizard" => loop {
             await Cooldown(u, 2, \{ near(128) })
@@ -252,6 +304,96 @@ task Character (A, u, fx, shots) {
             val e = random_enemy(A, u.x, u.y, 96)
             if e { spawn @acts Attack(A, u, 32, [x=e.x, y=e.y], fx) }
         }
+        "thief" => loop {
+            await Cooldown(u, 2, \{ near(64) })
+            val e = closest_enemy(A, u.x, u.y, 64)
+            if e { spawn @acts Shoot(A, u, toward(e), [chain=(if u.level == 3 => 10 => 5)], fx, shots) }
+        }
+        "blade" => loop {
+            await Cooldown(u, 4, \{ near(64) })
+            spawn @acts Shoot(A, u, 0, [], fx, shots)
+        }
+        "sage" => loop {
+            await Cooldown(u, 9, \{ near(96) })
+            val e = closest_enemy(A, u.x, u.y, 96)
+            if e { spawn @acts Shoot(A, u, toward(e), [], fx, shots) }
+        }
+        "cannoneer" => loop {
+            await Cooldown(u, 6, \{ near(128) })
+            val e = closest_enemy(A, u.x, u.y, 128)
+            if e { spawn @acts Shoot(A, u, toward(e), [], fx, shots) }
+        }
+        "dual_gunner" => loop {
+            await Cooldown(u, 2, \{ near(96) })
+            val e = closest_enemy(A, u.x, u.y, 96)
+            if e { spawn @acts Shoot(A, u, toward(e), [], fx, shots) }
+        }
+        "hunter" => loop {
+            await Cooldown(u, 2, \{ near(160) })
+            val e = closest_enemy(A, u.x, u.y, 160)
+            if e { spawn @acts Shoot(A, u, toward(e), [], fx, shots) }
+        }
+        "spellblade" => do {
+            val tk = [ t=0 ]
+            loop {
+                await Every(u, 2, tk)
+                spawn @acts Shoot(A, u, rfloat(0, 2*math.pi), [], fx, shots)
+            }
+        }
+        "lich" => loop {
+            await Cooldown(u, 4, \{ near(128) })
+            val e = closest_enemy(A, u.x, u.y, 128)
+            if e { spawn @acts Shoot(A, u, toward(e), [chain=(if u.level == 3 => 14 => 7), v=140], fx, shots) }
+        }
+        "corruptor" => loop {
+            await Cooldown(u, 2, \{ near(160) })
+            val e = closest_enemy(A, u.x, u.y, 160)
+            if e { spawn @acts Shoot(A, u, toward(e), [spawn_critters_on_kill=3,
+                       spawn_critters_on_hit=(if u.level == 3 => 2 => nil)], fx, shots) }
+        }
+        "beastmaster" => loop {
+            await Cooldown(u, 2, \{ near(160) })
+            val e = closest_enemy(A, u.x, u.y, 160)
+            if e { spawn @acts Shoot(A, u, toward(e), [spawn_critters_on_crit=2], fx, shots) }
+        }
+        "assassin" => loop {
+            await Cooldown(u, 2, \{ near(64) })
+            val e = closest_enemy(A, u.x, u.y, 64)
+            if e { spawn @acts Shoot(A, u, toward(e), [pierce=1000], fx, shots) }
+        }
+        "barrager" => do {
+            var n = 0
+            loop {
+                await Cooldown(u, 4, \{ near(128) })
+                val e = closest_enemy(A, u.x, u.y, 128)
+                val r = toward(e)
+                set n += 1
+                if (n == 3) && (u.level == 3) {
+                    set n = 0
+                    spawn @acts Volley(A, u, r, 15, 0.05, [knockback=14], fx, shots)
+                } else {
+                    spawn @acts Volley(A, u, r, 3, 0.075, [knockback=(if u.level == 3 => 14 => 7)], fx, shots)
+                }
+            }
+        }
+        "arcanist" => loop {
+            await Cooldown(u, 4, \{ near(128) })
+            val e = closest_enemy(A, u.x, u.y, 128)
+            if e {
+                val r = toward(e)
+                spawn @acts Shoot(A, u, r, [pierce=10000, v=40], fx, shots)
+                if sorcerer_due(A, u) {
+                    spawn @acts Later(0.25, \{ toward(e) }, A, u, [pierce=10000, v=40], fx, shots)
+                }
+            }
+        }
+        "artificer" => loop {
+            await 6s
+            spawn @acts Construct(A, u, 0, fx, shots)
+            if sorcerer_due(A, u) {
+                spawn @acts Construct(A, u, 0.25, fx, shots)
+            }
+        }
         "cleric" => loop {
             await 8s
             loop _ in (if u.level == 3 => 4 => 1) {
@@ -264,6 +406,36 @@ task Character (A, u, fx, shots) {
             spawn @shots Sentry(A, u, fx, shots)
         }
         else => await(false)       ;; the squire buffs (see `unit_buffs`)
+    }
+}
+
+;; Shots one after the other, a little spread (`t:after((i-1)*gap, ...)`).
+task Volley (A, u, r, n, gap, mods, fx, shots) {
+    pin ss = tasks()
+    loop i in n {
+        if i > 0 {
+            await(gap * 1s)
+        }
+        spawn @ss Shoot(A, u, r + rfloat(-math.pi/32, math.pi/32), mods, fx, shots)
+    }
+    await :all ss
+}
+
+;; A shot again after `d` seconds, as the repeat of a sorcerer.
+task Later (d, r, A, u, mods, fx, shots) {
+    await(d * 1s)
+    await Shoot(A, u, r(), mods, fx, shots)
+}
+
+;; The artificer builds an automaton where it is, at the peak of a spawn
+;; effect, if no enemy is there (after `d` seconds, for a repeat).
+task Construct (A, u, d, fx, shots) {
+    await(d * 1s)
+    val x, y = u.x, u.y
+    await SpawnEffect(x, y, u.color, fx)
+    play(artificer1, [pitch=rfloat(0.95, 1.05), volume=0.5])
+    if #enemies_in_circle(A, u.x, u.y, 2) == 0 {
+        spawn @shots Automaton(A, x, y, u, fx, shots)
     }
 }
 

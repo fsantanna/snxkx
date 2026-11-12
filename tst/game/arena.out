@@ -3,6 +3,5 @@
 0	add	Seeker 100.0 200.0
 117	enemy.die	seeker
 217	enemy.die	seeker
-270	enemy.die	seeker
-270	clear	1
-270	unit.hit	vagrant 146.0
+257	enemy.die	seeker
+257	clear	1

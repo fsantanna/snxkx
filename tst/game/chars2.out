@@ -1,0 +1,118 @@
+240	wave	1
+270	add	SpawnMarker 240.0 135.0
+328	crit	spellblade
+350	add	Seeker 228.0 123.0
+351	barrage	cannoneer
+353	enemy.die	seeker
+356	add	Seeker 252.0 123.0
+362	add	Seeker 252.0 147.0
+367	add	Automaton 233.4 150.9
+368	add	Seeker 228.0 147.0
+368	enemy.die	seeker
+368	unit.hit	artificer 310.0
+373	enemy.die	seeker
+374	add	Seeker 240.0 135.0
+380	add	Seeker 228.0 123.0
+380	enemy.die	seeker
+384	enemy.die	seeker
+386	add	Seeker 252.0 123.0
+390	enemy.die	seeker
+392	add	Seeker 252.0 147.0
+392	enemy.die	seeker
+419	enemy.die	seeker
+419	wave	2
+449	add	SpawnMarker 240.0 135.0
+529	add	Seeker 228.0 123.0
+530	enemy.die	speed_booster
+535	add	Seeker 252.0 123.0
+539	barrage	barrager
+553	add	Seeker 240.0 135.0
+553	enemy.die	seeker
+556	enemy.die	seeker
+559	add	Seeker 228.0 123.0
+559	enemy.die	seeker
+565	add	Seeker 252.0 123.0
+565	enemy.die	seeker
+583	add	Seeker 240.0 135.0
+591	enemy.die	seeker
+591	wave	3
+591	add	Critter 239.2 150.8
+591	add	Critter 239.2 150.8
+591	add	Critter 239.2 150.8
+591	add	Critter 239.2 150.8
+591	unit.hit	beastmaster 373.6
+621	add	SpawnMarker 400.0 135.0
+701	add	Seeker 388.0 123.0
+704	enemy.die	seeker
+707	add	Seeker 412.0 123.0
+710	enemy.die	seeker
+725	add	Seeker 400.0 135.0
+727	add	Automaton 379.4 150.9
+728	barrage	barrager
+731	add	Seeker 388.0 123.0
+735	enemy.die	speed_booster
+735	enemy.die	seeker
+737	add	Seeker 412.0 123.0
+737	barrage	barrager
+749	barrage	barrager
+755	add	Seeker 400.0 135.0
+761	add	Seeker 388.0 123.0
+761	enemy.die	seeker
+762	enemy.die	seeker
+767	add	Seeker 412.0 123.0
+767	enemy.die	seeker
+775	add	Critter 407.8 123.4
+775	add	Critter 407.8 123.4
+775	enemy.die	seeker
+775	add	Critter 407.8 123.4
+775	add	Critter 407.8 123.4
+775	add	Critter 407.8 123.4
+775	wave	4
+806	add	SpawnMarker 400.0 59.0
+806	add	SpawnMarker 240.0 135.0
+817	add	SpawnMarker 80.0 211.0
+817	add	SpawnMarker 400.0 211.0
+885	add	Seeker 388.0 47.0
+885	add	Seeker 228.0 123.0
+885	enemy.die	seeker
+891	add	Seeker 252.0 123.0
+891	add	Seeker 412.0 47.0
+892	crit	beastmaster
+892	add	Critter 190.8 151.0
+892	add	Critter 190.8 151.0
+892	enemy.die	seeker
+897	add	Seeker 68.0 199.0
+897	add	Seeker 388.0 199.0
+902	enemy.die	seeker
+903	add	Seeker 412.0 199.0
+903	add	Seeker 92.0 199.0
+903	enemy.die	seeker
+906	enemy.die	seeker
+927	add	SpawnMarker 80.0 59.0
+929	add	SpawnMarker 80.0 211.0
+935	add	SpawnMarker 400.0 59.0
+936	add	SpawnMarker 240.0 135.0
+951	enemy.die	seeker
+956	enemy.die	seeker
+981	enemy.die	seeker
+1007	add	Seeker 68.0 47.0
+1008	add	Seeker 68.0 199.0
+1013	add	Seeker 92.0 47.0
+1014	add	Seeker 92.0 199.0
+1015	add	Seeker 388.0 47.0
+1015	enemy.die	seeker
+1016	add	Seeker 228.0 123.0
+1016	enemy.die	seeker
+1019	enemy.die	seeker
+1021	add	Seeker 412.0 47.0
+1022	add	Seeker 252.0 123.0
+1023	barrage	cannoneer
+1025	enemy.die	seeker
+1027	enemy.die	seeker
+1051	enemy.die	seeker
+1054	enemy.die	seeker
+1070	enemy.die	seeker
+1070	clear	3
+1086	add	Automaton 138.3 150.9
+1091	crit	spellblade
+1202	crit	spellblade

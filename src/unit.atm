@@ -49,6 +49,8 @@ func base_stats (u, ng) {
     val x = u.level
     match u.stats || u.kind {
         :player => [ hp=100*math.pow(2, x-1), dmg=10*math.pow(2, x-1), mvspd=75 ]
+        :automaton => [ hp=100*math.pow(2, x-1), dmg=10*math.pow(2, x-1), mvspd=15 ]
+        :critter => [ hp=55, dmg=13, mvspd=63 ]        ;; with no level: y = 1
         :boss => do {
             val y = BOSS_Y@(x)
             val s = [

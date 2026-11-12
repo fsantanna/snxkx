@@ -10,27 +10,23 @@
 455	add	Seeker 388.0 123.0
 461	add	Seeker 412.0 123.0
 467	add	Seeker 412.0 147.0
+473	add	Seeker 388.0 147.0
 479	add	Seeker 400.0 135.0
-481	enemy.die	seeker
-485	add	Seeker 388.0 123.0
-490	enemy.die	seeker
-578	enemy.die	seeker
-578	unit.hit	vagrant 582.7
-578	enemy.die	speed_booster
-578	unit.hit	cleric 461.5
-579	enemy.die	speed_booster
-592	enemy.die	seeker
-592	unit.hit	vagrant 565.3
-592	enemy.die	seeker
-592	unit.hit	archer 384.1
+516	enemy.die	speed_booster
+564	enemy.die	seeker
+598	enemy.die	seeker
+598	unit.hit	vagrant 582.7
+610	enemy.die	seeker
+610	unit.hit	vagrant 565.3
 611	enemy.die	seeker
 611	unit.hit	vagrant 548.0
-616	enemy.die	seeker
-616	unit.hit	vagrant 530.7
-622	enemy.die	speed_booster
-622	unit.hit	vagrant 513.3
-626	unit.hit	archer 368.2
-626	enemy.die	seeker
-626	unit.hit	vagrant 496.0
-626	clear	6
-807	buy_screen	13
+612	enemy.die	seeker
+612	unit.hit	vagrant 530.7
+621	enemy.die	seeker
+621	unit.hit	vagrant 513.3
+627	enemy.die	seeker
+631	enemy.die	seeker
+643	enemy.die	seeker
+659	enemy.die	seeker
+659	clear	6
+840	buy_screen	11

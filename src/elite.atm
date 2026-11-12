@@ -233,7 +233,25 @@ task EliteAttack (A, e, fx, shots) {
                 par :all {
                     await WaitReal(10)
                 } with {
-                    await SteeringImpulse(e.st, 300, a, 0.75)
+                    spawn @fxs SteeringImpulse(e.st, 300, a, 0.75)
+                    ;; the dash pushes the enemies it meets, and ends on one, on
+                    ;; a unit (see `Unit`), or after 0.75s
+                    par :any {
+                        await 750ms
+                    } with {
+                        loop on :clock {
+                            until !e.headbutting
+                        }
+                    } with {
+                        val c = await :collision.enter until (it.b == e.b) && (it.other.kind == :enemy)
+                        val vx, vy = body_vel(e.b)
+                        push(c.other, math.sqrt(vx*vx + vy*vy)/4, angle_to(c.other, e.x, e.y))
+                        spawn @fx HitCircle(c.x, c.y, [rs=6, color=fg@0, duration=0.1])
+                        loop _ in 2 {
+                            spawn @fx HitParticle(c.x, c.y, [color=e.color])
+                        }
+                        play(hit2, [pitch=rfloat(0.95, 1.05), volume=0.35])
+                    }
                     set e.headbutting = false
                 }
             }

@@ -9,7 +9,7 @@
 func new_arena (level, menu) {
     [
         level = level || 1, ng = 0, menu = menu,
-        units = [], enemies = [], path = [],
+        units = [], enemies = [], critters = [], path = [], time = 0,
         x1 = W/2 - 0.8*W/2, y1 = H/2 - 0.8*H/2,
         x2 = W/2 + 0.8*W/2, y2 = H/2 + 0.8*H/2,
         damage_dealt = 0, damage_taken = 0,
@@ -150,6 +150,37 @@ task Arena (A, enemies) {
         spawn @floor FloorText(W/2, H/2 + 2, [ [text="[light_bg]<- or a         -> or d", font=fat_font, alignment=:center] ], 0.6)
         spawn @floor FloorText(W/2, H/2 + 18, [ [text="[light_bg]turn left                                      turn right", font=pixul_font, alignment=:center] ], 1)
         spawn @floor FloorText(W/2, H/2 + 46, [ [text="[light_bg]esc - options", font=fat_font, alignment=:center] ], 0.6)
+    }
+
+    ;; the orbs of the psykers, 1s after the start: one per psyker, and 2
+    ;; or 4 more with their sets (`player.lua:1090-1117`)
+    spawn {
+        if !A.menu {
+            await 1s
+            val ps = []
+            loop _, u in A.units {
+                if has_class(u, "psyker") {
+                    set ps@+ = u
+                }
+            }
+            val orb = \(u) {
+                [ x=u.x + 24*math.cos(u.r), y=u.y + 24*math.sin(u.r), r=0, color=fg@0, v=200,
+                  dmg=u.dmg, character="psyker", parent=u ]
+            }
+            loop _, u in ps {
+                spawn @shots Projectile(A, orb(u), effects)
+            }
+            loop _ in (match A.cl.psyker { 2 => 4 ; 1 => 2 ; else => 0 }) {
+                spawn @shots Projectile(A, orb(rtable(if #ps > 0 => ps => A.units)), effects)
+            }
+        }
+    }
+
+    ;; the time of the arena, as its timer (`main.current.t.time`)
+    spawn {
+        loop us on :clock {
+            set A.time += us / 1000000
+        }
     }
 
     ;; the world steps after all entities have moved

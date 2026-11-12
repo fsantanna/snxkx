@@ -31,11 +31,11 @@
 545	add	Seeker 92.0 147.0
 551	add	Seeker 68.0 147.0
 557	add	Seeker 80.0 135.0
-773	enemy.die	seeker
-793	enemy.die	seeker
-793	enemy.die	seeker
-793	enemy.die	seeker
-793	enemy.die	seeker
-793	enemy.die	seeker
-793	clear	1
-974	buy_screen	6
+775	enemy.die	seeker
+791	enemy.die	seeker
+794	enemy.die	seeker
+817	enemy.die	seeker
+819	enemy.die	seeker
+821	enemy.die	seeker
+821	clear	1
+1002	buy_screen	6

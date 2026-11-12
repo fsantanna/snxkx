@@ -110,9 +110,11 @@ task Seeker (A, e, fx, shots) {
         }
     }
 
+    var last = nil              ;; the last hit
     par :any {
         ;; the life of the seeker: until its hp ends
         loop h on :Hit until it.to == e {
+            set last = h
             spawn @fxs HfxUse(e.hit, 0.25, 200, 10)
             if !e.push_invulnerable {
                 spawn @fxs ShowHp(e)
@@ -122,6 +124,13 @@ task Seeker (A, e, fx, shots) {
                 }
                 set e.hp = math.min(e.hp - dmg, e.max_hp)
                 set A.damage_dealt += dmg
+                val pj = h.projectile
+                if pj && pj.spawn_critters_on_hit {
+                    play(critter1, [pitch=rfloat(0.95, 1.05), volume=0.5])
+                    loop _ in pj.spawn_critters_on_hit {
+                        spawn @shots Critter(A, e.x, e.y, rfloat(0, 2*math.pi), 10, pj.parent.dmg, pj.parent, fx)
+                    }
+                }
             }
             until e.hp <= 0
         }
@@ -205,6 +214,23 @@ task Seeker (A, e, fx, shots) {
                     nil
                 } with {
                     await :Push until it.to == e
+                } with {
+                    ;; fast, it hits and pushes the enemies it meets, and is
+                    ;; hit back (`Seeker:on_collision_enter`, `enemies.lua:414-421`)
+                    loop c on :collision.enter until (it.b == e.b) && (it.other.kind == :enemy) {
+                        val vx, vy = body_vel(e.b)
+                        if math.sqrt(vx*vx + vy*vy) > 60 {
+                            val o = c.other
+                            hit(o, math.floor(e.push_force/4), [from_enemy=true])
+                            hit(e, math.floor(e.push_force/2), [from_enemy=true])
+                            push(o, math.floor(e.push_force/2), angle_to(o, e.x, e.y))
+                            spawn @fx HitCircle(c.x, c.y, [rs=6, color=fg@0, duration=0.1])
+                            loop _ in 2 {
+                                spawn @fx HitParticle(c.x, c.y, [color=e.color])
+                            }
+                            play(hit2, [pitch=rfloat(0.95, 1.05), volume=0.35])
+                        }
+                    }
                 }
                 until p == nil
             }
@@ -216,6 +242,13 @@ task Seeker (A, e, fx, shots) {
 
     ;; death, as the end of `Seeker:hit`
     trace("enemy.die", e.boss || e.elite || "seeker")
+    val pj = last && last.projectile
+    if pj && pj.spawn_critters_on_kill {
+        play(critter1, [pitch=rfloat(0.95, 1.05), volume=0.5])
+        loop _ in pj.spawn_critters_on_kill {
+            spawn @shots Critter(A, e.x, e.y, rfloat(0, 2*math.pi), 5, pj.parent.dmg, pj.parent, fx)
+        }
+    }
     if e.boss {
         slow(0.25, 1)
         play(magic_die1, [pitch=rfloat(0.95, 1.05), volume=0.5])

@@ -63,6 +63,13 @@ func steer_update (st) {
     set st.fy = 0
 }
 
+;; As `apply_steering_force(f, r)` with no duration: a force that stays
+;; until another one replaces it, as in the original.
+func steer_force (st, f, r) {
+    set st.ax = f*math.cos(r)
+    set st.ay = f*math.sin(r)
+}
+
 ;; As `seek_point(x, y, deceleration, weight)`.
 func seek_point (st, x, y, decel, weight) {
     val px, py = body_pos(st.b)

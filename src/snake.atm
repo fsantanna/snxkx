@@ -199,6 +199,12 @@ task Unit (A, u, fx, shots) {
                 spawn @fxs HfxUse(u.chp, 0.5)
             }
             val dmg = if STRESS => 0 => math.max(unit_damage(u, e.dmg), 0)
+            if (u.character == "beastmaster") && (u.level == 3) {
+                play(critter1, [pitch=rfloat(0.95, 1.05), volume=0.5])
+                loop _ in 4 {
+                    spawn @shots Critter(A, u.x, u.y, rfloat(0, 2*math.pi), 20, u.dmg, u, fx)
+                }
+            }
             set u.hp -= dmg
             play(rtable([player_hit1, player_hit2]), [pitch=rfloat(0.95, 1.05), volume=0.5])
             shake(4, 0.5)

@@ -1,0 +1,253 @@
+;; The things that the units summon and that fight by themselves, as the
+;; classes of `player.lua`: the pets of the hunter (`Pet`), the critters
+;; (`Critter`), and the automatons of the artificer (`Automaton`).
+
+;; As `Pet`: a square that runs along `r`, crosses six enemies, pushing
+;; and hitting each, and dies on a wall (at level 3 of its hunter, it
+;; bounces once).
+task Pet (A, x, y, r, v, parent, fx) {
+    trace("add", string.format("Pet %.1f %.1f", x, y))
+    val o = [ kind=:pet, w=8, h=8, x=x, y=y, r=r, v=v, pierce=6, ricochet=1, hit=hfx(1),
+              color=character_colors@("hunter") ]
+    body(A.w, o, :dynamic, x, y, :projectile, [:rect, 8, 8])
+    defer {
+        body_free(A.w, o.b)
+    }
+    body_restitution(o.b, 0.5)
+    play(pet1, [pitch=rfloat(0.95, 1.05), volume=0.35])
+    spawn Springs(o.hit.s)
+    pin fxs = tasks()
+    spawn {
+        loop on :draw {
+            eng.push(o.x, o.y, o.r, o.hit.s.x)
+            eng.rect(o.x, o.y, 8, 8, 3, 3, if o.hit.f > 0 => fg@0 => o.color)
+            eng.pop()
+        }
+    }
+    par :any {
+        loop on :clock {
+            set o.x, o.y = body_pos(o.b)
+            body_set(o.b, :angle, o.r)
+            body_set(o.b, :velocity, o.v*math.cos(o.r), o.v*math.sin(o.r))
+        }
+    } with {
+        loop c on :collision.enter until (it.b == o.b) && (it.other.kind == :wall) {
+            loop _ in rint(3, 4) {
+                spawn @fx HitParticle(c.x, c.y, [r=rfloat(0, 2*math.pi), color=o.color])
+            }
+            spawn @fx HitCircle(c.x, c.y, [scale_down=true])
+            play(hit2, [pitch=rfloat(0.95, 1.05), volume=0.35])
+            until (parent.level != 3) || (o.ricochet <= 0)
+            bounce(o, c.nx, c.ny)
+            set o.ricochet -= 1
+        }
+    } with {
+        loop c on :trigger.enter until (it.b == o.b) && (it.other.kind == :enemy) {
+            val e = c.other
+            shake(2, 0.5)
+            hit(e, parent.dmg*(parent.conjurer_buff_m || 1))
+            push(e, 35*(parent.knockback_m || 1), angle_to(o, e.x, e.y))
+            play(hit2, [pitch=rfloat(0.95, 1.05), volume=0.35])
+            until o.pierce <= 0
+            set o.pierce -= 1
+        }
+        loop _ in rint(3, 4) {
+            spawn @fx HitParticle(o.x, o.y, [r=rfloat(0, 2*math.pi), color=o.color])
+        }
+        spawn @fx HitCircle(o.x, o.y, [scale_down=true])
+    }
+}
+
+;; As `Critter`: a small orange unit, thrown out at `v` along `r`, that
+;; chases a random enemy and bites it, losing one of its few hits (more
+;; with the swarmers). No more than 100 at once.
+task Critter (A, x, y, r, v, dmg, parent, fx) {
+    if #A.critters > 100 {
+        return nil
+    }
+    trace("add", string.format("Critter %.1f %.1f", x, y))
+    val c = [ kind=:critter, w=7, h=4, x=x, y=y, r=r, level=nil, stats=:critter,
+              classes=[:enemy_critter], color=orange@0, hit=hfx(1) ]
+    unit_stats(c, true, 0)
+    set c.dmg = dmg || parent.dmg
+    set c.hp = 1 + (match A.cl.swarmer { 2 => 3 ; 1 => 1 ; else => 0 }) + (parent.hive || 0)
+    body(A.w, c, :dynamic, x, y, :player, [:rect, 7, 4])
+    body_restitution(c.b, 0.5)
+    val st = steerable(c.b, c.v, 400, math.pi, 1)
+    set A.critters@+ = c
+    defer {
+        body_free(A.w, c.b)
+        val cs = []
+        loop _, o in A.critters {
+            if o != c {
+                set cs@+ = o
+            }
+        }
+        set A.critters = cs
+    }
+    spawn Springs(c.hit.s)
+    pin fxs = tasks()
+    spawn {
+        loop on :draw {
+            eng.push(c.x, c.y, c.r, c.hit.s.x)
+            eng.rect(c.x, c.y, 7, 4, 2, 2, if c.hit.f > 0 => fg@0 => c.color)
+            eng.pop()
+        }
+    }
+    var invulnerable = true
+    spawn {
+        await 500ms
+        set invulnerable = false
+    }
+    spawn {
+        loop w on :collision.enter until (it.b == c.b) && (it.other.kind == :wall) {
+            spawn @fxs HfxUse(c.hit, 0.15, 200, 10, 0.1)
+            bounce(c, w.nx, w.ny)
+        }
+    }
+    par :any {
+        ;; its hits: one per bite (the original's `Critter:hit`)
+        loop h on :Hit until it.to == c {
+            if !invulnerable {
+                spawn @fxs HfxUse(c.hit, 0.25, 200, 10)
+                set c.hp -= 1
+            }
+            until c.hp <= 0
+        }
+    } with {
+        loop t on :trigger.enter until (it.b == c.b) && (it.other.kind == :enemy) {
+            play(critter2, [pitch=rfloat(0.65, 0.85), volume=0.1])
+            hit(c, 1)
+            hit(t.other, c.dmg, [critter=c])
+        }
+    } with {
+        ;; thrown out (as `Critter:push`), then chasing
+        var p = [ f=v, r=r ]
+        var target = nil
+        loop {
+            loop {
+                body_set(c.b, :impulse, p.f*math.cos(p.r), p.f*math.sin(p.r))
+                body_set(c.b, :angular_impulse,
+                    rtable([rfloat(-12*math.pi, -4*math.pi), rfloat(4*math.pi, 12*math.pi)]))
+                body_set(c.b, :damping, 1.5)
+                body_set(c.b, :angular_damping, 1.5)
+                set p = par :any {
+                    loop on :clock {
+                        set c.x, c.y = body_pos(c.b)
+                        set c.r = body_angle(c.b)
+                        val vx, vy = body_vel(c.b)
+                        until math.sqrt(vx*vx + vy*vy) < 50
+                    }
+                    nil
+                } with {
+                    await :Push until it.to == c
+                }
+                until !p
+            }
+            body_set(c.b, :damping, 0)
+            body_set(c.b, :angular_damping, 0)
+            set p = par :any {
+                loop on :clock {
+                    set c.x, c.y = body_pos(c.b)
+                    set c.r = body_angle(c.b)
+                    if !target || X.nin(target, A.enemies) {
+                        set target = if #A.enemies > 0 => rtable(A.enemies) => nil
+                    }
+                    steer_update(st)
+                    if target {
+                        seek_point(st, target.x, target.y)
+                    } else {
+                        seek_point(st, W/2, H/2)
+                    }
+                    wander(st, 50, 200, 50)
+                    rotate_towards_velocity(c.b, 1)
+                    separate(st, 8, A.critters)
+                }
+            } with {
+                await :Push until it.to == c
+            }
+        }
+    }
+    ;; as `Critter:die`
+    loop _ in rint(2, 3) {
+        spawn @fx HitParticle(c.x, c.y, [r=rfloat(0, 2*math.pi), color=c.color])
+    }
+    spawn @fx HitCircle(c.x, c.y, [scale_down=true])
+    play(rtable([enemy_die1, enemy_die2]), [pitch=rfloat(0.9, 1.1), volume=0.5])
+    play(critter2, [pitch=rfloat(0.95, 1.05), volume=0.2])
+}
+
+;; As `Automaton`: a slow unit of the artificer that chases a random
+;; enemy, shoots the closest one every 2s (1.5s at level 3), and breaks
+;; down after 18s (more with the conjurers), throwing 12 projectiles at
+;; level 3.
+task Automaton (A, x, y, parent, fx, shots) {
+    trace("add", string.format("Automaton %.1f %.1f", x, y))
+    val a = [ kind=:automaton, w=8, h=8, x=x, y=y, r=0, level=parent.level, stats=:automaton,
+              classes=[:sorcerer, :conjurer], color=character_colors@("artificer"), hit=hfx(1) ]
+    unit_stats(a, true, 0)
+    body(A.w, a, :dynamic, x, y, :player, [:rect, 8, 8])
+    body_restitution(a.b, 0.5)
+    val st = steerable(a.b, a.v, 2000, 4*math.pi, 4)
+    defer {
+        body_free(A.w, a.b)
+    }
+    spawn Springs(a.hit.s)
+    spawn {
+        loop on :draw {
+            eng.push(a.x, a.y, a.r, a.hit.s.x)
+            eng.rect(a.x, a.y, 8, 8, 3, 3, if a.hit.f > 0 => fg@0 => a.color)
+            eng.pop()
+        }
+    }
+    var target = nil
+    par :any {
+        await((18*(parent.conjurer_buff_m || 1)) * 1s)
+    } with {
+        loop on :clock {
+            set a.x, a.y = body_pos(a.b)
+            unit_stats(a, false, 0)
+            set st.max_v = a.max_v
+            if !target || X.nin(target, A.enemies) {
+                set target = if #A.enemies > 0 => rtable(A.enemies) => nil
+            }
+            steer_update(st)
+            if target {
+                seek_point(st, target.x, target.y)
+            } else {
+                seek_point(st, W/2, H/2)
+            }
+            wander(st, 50, 200, 50)
+            rotate_towards_velocity(a.b, 1)
+            separate(st, 32, A.enemies)
+            set a.r = body_angle(a.b)
+        }
+    } with {
+        ;; its cooldown is 2s, times 0.75 at level 3 (`set_every_multiplier`)
+        val u = [ aspd_m=(if parent.level == 3 => 0.75 => 1) ]
+        loop {
+            await Cooldown(u, 2, \{ #enemies_in_circle(A, a.x, a.y, 96) > 0 })
+            val e = closest_enemy(A, a.x, a.y, 96)
+            if e {
+                play(turret1, [pitch=rfloat(0.95, 1.05), volume=0.1])
+                play(turret2, [pitch=rfloat(0.95, 1.05), volume=0.1])
+                play(wizard1, [pitch=rfloat(0.95, 1.05), volume=0.1])
+                val r = angle_to(a, e.x, e.y)
+                spawn @fx HitCircle(a.x + 0.8*8*math.cos(r), a.y + 0.8*8*math.sin(r), [rs=6])
+                spawn @shots Projectile(A, [x=a.x + 1.6*8*math.cos(r), y=a.y + 1.6*8*math.sin(r), v=250, r=r,
+                    color=parent.color, dmg=parent.dmg, character="artificer", parent=parent, level=parent.level], fx)
+            }
+        }
+    }
+    loop _ in rint(3, 4) {
+        spawn @fx HitParticle(a.x, a.y, [r=rfloat(0, 2*math.pi), color=a.color])
+    }
+    spawn @fx HitCircle(a.x, a.y, [scale_down=true])
+    if parent.level == 3 {
+        play(shoot1, [pitch=rfloat(0.95, 1.05), volume=0.2])
+        loop i in 12 {
+            spawn @shots Projectile(A, [x=a.x, y=a.y, color=a.color, r=i*math.pi/6, v=200, dmg=parent.dmg,
+                character="artificer_death", parent=parent, level=parent.level, pierce=1, ricochet=1], fx)
+        }
+    }
+}
