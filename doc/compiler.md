@@ -66,3 +66,32 @@ contact, instead of two emits.
 What would help: a table pinned in the block of a pool, or a weak
 reference to a task, that may keep the tasks of the pool and loses them
 when they end.
+
+## 3. `math` has no `atan2`, `exp`, or `log`
+
+Seen at `2f45211`.
+
+The original uses `math.atan2` for every angle to a target (steering,
+rotations, projectiles) and `math.exp` in an easing. The `math` of this
+compiler has neither, nor `log` or `tan`.
+
+What the port does: `cmath` in `eng/eng.atm`, four functions over C.
+
+## 4. A parameter named `pub` is the `pub` of the task, silently
+
+Seen at `2f45211`.
+
+```
+func body (w, pub, x, y) {
+    set pub.b = 1       ;; ==> invalid index : expected table : got nil
+}
+body(w, [], 0, 0)
+```
+
+`pub` is a keyword, but it is accepted as the name of a parameter (and
+of a `val`), which then refers to the `pub` of the running task, not to
+the argument. The error comes later, far from the cause.
+
+What the port does: no variable is named `pub`.
+
+What would help: a compile error for `pub` as a name.
