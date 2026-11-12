@@ -1,0 +1,36 @@
+;; The buffs from the passives (`Player:init` and `Player:update`), with
+;; the values by hand in the comments.
+include "../../src/game.atm"
+spawn Background()
+spawn Camera()
+spawn SlowMotion()
+
+val P = \(n, l) { [ passive=n, level=l, xp=0 ] }
+val run = [ level=2, loop=0, gold=50, units=[
+    ["vagrant", 1], ["swordsman", 1], ["wizard", 1], ["squire", 1], ["archer", 1], ["cleric", 1],
+], passives=[ P("centipede", 3), P("amplify", 2), P("ballista", 1), P("magnify", 3), P("speed_3", 1),
+    P("damage_4", 1), P("defensive_stance", 2), P("offensive_stance", 2), P("reinforce", 1),
+    P("unwavering_stance", 3), P("chronomancy", 2) ], pool=[] ]
+val A = new_arena(2)
+set A.run = run
+spawn Arena(A)
+loop _ in 30 {
+    await :clock
+}
+;; All: squire 1.2 dmg and def, reinforce 1.1 dmg, def, and aspd (the
+;; squire is an enchanter), centipede 1.3 mv, amplify 1.35, magnify 1.5.
+;; vagrant (leader, an explorer with 1 active set: 1.15): dmg 1.2 x 1.15 x
+;;   1.2 (ballista) x 1.1 x 1.2 (offensive) = 2.1859, aspd 1.15 x 1.1 =
+;;   1.265, def 1.2 x 1.1 x 1.2 (defensive) = 1.584
+;; swordsman: dmg 1.32, aspd 1.1, def 1.32
+;; wizard (third, a mage): dmg 1.32 x 1.2 (ballista) = 1.584, aspd 1.1 x
+;;   1.5 (speed 3) x 1.25 (chronomancy) = 2.0625
+;; squire (fourth): dmg 1.32 x 1.3 (damage 4) = 1.716
+;; archer: dmg 1.584 (ballista); cleric (last): dmg and def 1.584 (stances)
+loop i, u in A.units {
+    print(u.character, string.format("dmg %.4f aspd %.4f def %.4f area %.4f/%.4f mv %.4f",
+        u.buff_dmg_m, u.buff_aspd_m, u.buff_def_m, u.buff_area_dmg_m, u.buff_area_size_m, u.buff_mvspd_m))
+}
+await 5s
+;; the warriors (swordsman, squire) grow their defense by 0.12 every 5s
+print("unwavering", (A.units@1).unwavering_stance_def_m, (A.units@3).unwavering_stance_def_m)

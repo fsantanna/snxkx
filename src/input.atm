@@ -5,6 +5,30 @@
 
 val HELD = [ left=0, right=0 ]
 
+;; When an action started to be held, in seconds of real time, as
+;; `move_left_pressed` (not while the other one is held), or nil.
+val HELD_SINCE = [ left=nil, right=nil ]
+
+func held_press (a) {
+    set HELD@(a) += 1
+    val other = if a == :left => :right => :left
+    if (HELD@(a) == 1) && !HELD_SINCE@(other) {
+        set HELD_SINCE@(a) = eng.tick() / 60
+    }
+}
+
+func held_release (a) {
+    set HELD@(a) = math.max(0, HELD@(a) - 1)
+    if HELD@(a) == 0 {
+        set HELD_SINCE@(a) = nil
+    }
+}
+
+;; Whether an action is held for more than `s` seconds.
+func held_for (a, s) {
+    HELD_SINCE@(a) && ((eng.tick()/60 - HELD_SINCE@(a)) > s)
+}
+
 val KEY_ACTION = [ A=:left, Left=:left, D=:right, E=:right, S=:right, Right=:right ]
 val BUT_ACTION = [ @1=:left, @3=:right ]
 
@@ -12,22 +36,22 @@ task Input () {
     par {
         loop e on :key.dn {
             val a = KEY_ACTION@(e.name)
-            if a { set HELD@(a) += 1 }
+            if a { held_press(a) }
         }
     } with {
         loop e on :key.up {
             val a = KEY_ACTION@(e.name)
-            if a { set HELD@(a) = math.max(0, HELD@(a) - 1) }
+            if a { held_release(a) }
         }
     } with {
         loop e on :mouse.dn {
             val a = BUT_ACTION@(e.but)
-            if a { set HELD@(a) += 1 }
+            if a { held_press(a) }
         }
     } with {
         loop e on :mouse.up {
             val a = BUT_ACTION@(e.but)
-            if a { set HELD@(a) = math.max(0, HELD@(a) - 1) }
+            if a { held_release(a) }
         }
     }
 }

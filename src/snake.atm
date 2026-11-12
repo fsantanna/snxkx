@@ -149,6 +149,7 @@ task Unit (A, u, fx, shots) {
             await Character(A, u, fx, shots)
         }
     }
+    spawn UnitPassives(A, u)
 
     ;; the chain infusion of the stormweaver (`chain_infuse`, a tagged timer)
     spawn {
@@ -212,6 +213,8 @@ task Unit (A, u, fx, shots) {
     par :any {
         ;; the life of the unit: until its hp ends
         loop e on :Hit until it.to == u {
+          ;; undead (lasting 7), only its own end hits it
+          if !u.undead || e.from_undead {
             spawn @fxs HfxUse(u.hit, 0.25, 200, 10)
             spawn @fxs ShowHp(u)
             if u.chp {
@@ -246,6 +249,23 @@ task Unit (A, u, fx, shots) {
                     }
                 }
             }
+            ;; the passives that react to a hit (`Player:hit`)
+            if u.payback && has_class(u, "enchanter") {
+                loop _, o in A.units {
+                    set o.payback_dmg_m = (o.payback_dmg_m || 1) + lv(u.payback, 0.02, 0.05, 0.08, 0)
+                }
+            }
+            if u.unrelenting_stance && has_class(u, "warrior") {
+                loop _, o in A.units {
+                    set o.unrelenting_stance_def_m = (o.unrelenting_stance_def_m || 1) + lv(u.unrelenting_stance, 0.02, 0.05, 0.08, 0)
+                }
+            }
+            if u.crucio {
+                loop _, o in A.enemies {
+                    hit(o, lv(u.crucio, 0.2, 0.3, 0.4)*dmg)
+                    spawn @fx HitCircle(u.x, u.y, [rs=6, color=fg@0, duration=0.1])
+                }
+            }
             if (u.hp <= 0) && u.divined {
                 ;; the priest of level 3 saves it once
                 set u.hp = u.max_hp
@@ -257,7 +277,13 @@ task Unit (A, u, fx, shots) {
                 spawn @fx HitCircle(u.x, u.y, [rs=12, scale_down=true, duration=0.3, change_color=[0.5, u.color]])
                 set u.divined = false
             }
-            until u.hp <= 0
+            if (u.hp <= 0) && u.lasting_7 && (A.units@6 == u) && !u.undead {
+                ;; the seventh unit lives on for 10s
+                set u.undead = true
+                spawn @fxs Undead(u)
+            }
+          }
+            until (u.hp <= 0) && (!u.undead || e.from_undead)
         }
     } with {
         ;; a follower, until the units ahead of it die
@@ -402,4 +428,10 @@ func snake_remove (A, u) {
             emit @:global :Snake.lead [ u=us@0 ]
         }
     }
+}
+
+;; The end of an undead unit (lasting 7), 10s later.
+task Undead (u) {
+    await 10s
+    hit(u, 10000, [from_undead=true])
 }

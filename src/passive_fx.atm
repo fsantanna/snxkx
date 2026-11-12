@@ -1,0 +1,225 @@
+;; The effects of the passives that run on their own, as the timers that
+;; `Player:init` starts for them (`player.lua:882-1127`): those of the
+;; leader, as the arena starts, and those of each unit.
+;;
+;; Every unit has the same passive fields, so the passives of the leader
+;; are those of the run (`passive_level`).
+
+;; The level of a passive of the run, or nil.
+func passive_level (A, name) {
+    var l = nil
+    loop _, p in A.run && A.run.passives || [] {
+        if p.passive == name {
+            set l = p.level
+        }
+    }
+    l
+}
+
+;; The mages of the units.
+func mages (A) {
+    val out = []
+    loop _, u in A.units {
+        if has_class(u, "mage") {
+            set out@+ = u
+        }
+    }
+    out
+}
+
+;; The passives that start with the arena (and 0.1s after it, as the
+;; original): the awakening of a mage, the reinforce and the enchantment
+;; of the enchanters, and the timers of the leader.
+task Passives (A, fx, shots) {
+    pin ps = tasks()
+    await 100ms
+    val awakening = passive_level(A, "awakening")
+    if awakening {
+        val ms = mages(A)
+        if #ms > 0 {
+            var m = rtable(ms)
+            var runs = 0
+            loop {
+                while X.xin(m.character, non_attacking_characters) && (runs < 1000)
+                set m = rtable(ms)
+                set runs += 1
+            }
+            set m.awakening_aspd_m = lv(awakening, 1.5, 1.75, 2)
+            set m.awakening_dmg_m = lv(awakening, 1.5, 1.75, 2)
+        }
+    }
+    val enchanters = do {
+        var n = 0
+        loop _, u in A.units {
+            if has_class(u, "enchanter") {
+                set n += 1
+            }
+        }
+        n
+    }
+    val reinforce = passive_level(A, "reinforce")
+    if reinforce && (enchanters > 0) {
+        loop _, u in A.units {
+            val v = lv(reinforce, 1.1, 1.2, 1.3, 1)
+            set u.reinforce_dmg_m = v
+            set u.reinforce_def_m = v
+            set u.reinforce_aspd_m = v
+        }
+    }
+    val enchanted = passive_level(A, "enchanted")
+    if enchanted && (enchanters >= 2) {
+        ;; every unit does it, so as many units may get it
+        loop _ in #A.units {
+            val o = attacking_unit(A)
+            if o {
+                set o.enchanted_aspd_m = lv(enchanted, 1.33, 1.66, 1.99)
+            }
+        }
+    }
+    val dp = passive_level(A, "divine_punishment")
+    if dp {
+        spawn @ps DivinePunishment(A, fx)
+    }
+    if passive_level(A, "shoot_5") {
+        spawn @ps Shoot5(A, fx, shots)
+    }
+    if passive_level(A, "death_6") {
+        spawn @ps Death6(A)
+    }
+    if passive_level(A, "psycholeak") {
+        spawn @ps Psycholeak(A, fx)
+    }
+    if passive_level(A, "divine_blessing") {
+        spawn @ps DivineBlessing(A, fx)
+    }
+    val ouro = passive_level(A, "ouroboros_technique_r")
+    if ouro {
+        spawn @ps OuroborosR(A, ouro, fx, shots)
+    }
+    await(false)
+}
+
+;; Divine punishment: every 5s, a bolt on every enemy, for 10 times the
+;; number of mages.
+task DivinePunishment (A, fx) {
+    loop {
+        await 5s
+        val n = #mages(A)
+        if #A.enemies > 0 {
+            play(thunder1, [volume=0.3])
+            shake(4, 0.5)
+        }
+        loop _, e in A.enemies {
+            hit(e, 10*n)
+            spawn @fx LightningLine([x=e.x, y=e.y - 32], e, blue@0, fx)
+            play(rtable([spark1, spark2, spark3]), [pitch=rfloat(0.9, 1.1), volume=0.3])
+        }
+    }
+}
+
+;; Shoot 5: the fifth unit shoots an arrow every 0.33s.
+task Shoot5 (A, fx, shots) {
+    pin bs = tasks()
+    loop {
+        await 330ms
+        val u = A.units@4
+        if u {
+            val t = closest_enemy(A, u.x, u.y, 96)
+            val r = if t => angle_to(u, t.x, t.y) => rfloat(0, 2*math.pi)
+            spawn @bs Barrage(A, u, r, 1, [shoot_5=true], fx, shots)
+        }
+    }
+}
+
+;; Death 6: the sixth unit loses a tenth of its hp every 3s.
+task Death6 (A) {
+    loop {
+        await 3s
+        play(flagellant1, [pitch=rfloat(0.95, 1.05), volume=0.4])
+        val u = A.units@5
+        if u {
+            play(hit2, [pitch=rfloat(0.95, 1.05), volume=0.4])
+            hit(u, 0.1*u.max_hp)
+        }
+    }
+}
+
+;; Psycholeak: an orb of a psyker at the leader every 10s.
+task Psycholeak (A, fx) {
+    loop {
+        await 10s
+        val u = A.units@0
+        if u {
+            spawn @fx Projectile(A, [x=u.x + 24*math.cos(u.r), y=u.y + 24*math.sin(u.r), r=0, color=fg@0,
+                v=200, dmg=u.dmg, character="psyker", parent=u], fx)
+        }
+    }
+}
+
+;; Divine blessing: a healing orb every 8s, somewhere.
+task DivineBlessing (A, fx) {
+    loop {
+        await 8s
+        val x = rfloat(A.x1 + 16, A.x2 - 16)
+        val y = rfloat(A.y1 + 16, A.y2 - 16)
+        spawn @fx HealAt(A, x, y, fx)
+    }
+}
+
+;; Ouroboros technique (right): while the leader turns right for more
+;; than 1s, a random unit shoots an arrow, at the enemy closest to the
+;; leader, or out of the snake.
+task OuroborosR (A, l, fx, shots) {
+    pin bs = tasks()
+    loop {
+        await(lv(l, 0.5, 0.33, 0.25) * 1s)
+        val lead = A.units@0
+        if lead && held_for(:right, 1) {
+            val t = closest_enemy(A, lead.x, lead.y, 96)
+            val u = rtable(A.units)
+            if t {
+                spawn @bs Barrage(A, u, angle_to(u, t.x, t.y), 1, [], fx, shots)
+            } else {
+                var cx, cy = 0, 0
+                loop _, o in A.units {
+                    set cx += o.x
+                    set cy += o.y
+                }
+                set cx = cx/#A.units
+                set cy = cy/#A.units
+                spawn @bs Barrage(A, u, math.atan2(u.y - cy, u.x - cx), 1, [], fx, shots)
+            }
+        }
+    }
+}
+
+;; The passives of a unit that grow with time: the unwavering stance of a
+;; warrior (defense every 5s), the unleash of a nuker (area every 1s).
+task UnitPassives (A, u) {
+    pin ps = tasks()
+    if u.unwavering_stance && has_class(u, "warrior") {
+        set u.unwavering_stance_def_m = 1
+        spawn @ps Grows(u, "unwavering_stance_def_m", 5, lv(u.unwavering_stance, 0.04, 0.08, 0.12))
+    }
+    if u.unleash && has_class(u, "nuker") {
+        set u.unleash_area_dmg_m = 1
+        set u.unleash_area_size_m = 1
+        spawn @ps Grows(u, "unleash_area_dmg_m", 1, 0.01)
+        spawn @ps Grows(u, "unleash_area_size_m", 1, 0.01)
+    }
+    if u.payback {
+        set u.payback_dmg_m = 1
+    }
+    if u.unrelenting_stance {
+        set u.unrelenting_stance_def_m = 1
+    }
+    await(false)
+}
+
+;; A field of a unit that grows by `v` every `d` seconds.
+task Grows (u, k, d, v) {
+    loop {
+        await(d * 1s)
+        set u@(k) += v
+    }
+}

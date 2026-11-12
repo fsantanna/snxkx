@@ -948,6 +948,11 @@ task HealAt (A, x, y, fx) {
     }
 }
 
+;; The characters that launch projectiles (`launches_projectiles`).
+val PROJECTILE_CHARACTERS = ["vagrant", "archer", "scout", "outlaw", "blade", "wizard", "cannoneer",
+    "dual_gunner", "hunter", "spellblade", "engineer", "corruptor", "beastmaster", "jester", "assassin",
+    "barrager", "arcanist", "illusionist", "artificer", "miner", "thief", "sentry"]
+
 ;; The buffs of a unit, recomputed in every tick, as `Player:update`
 ;; (`player.lua:1147-1342`): each buff is a field of the unit, and the
 ;; stats multiply them. The squire and the chronomancer set their fields
@@ -1008,6 +1013,73 @@ func unit_buffs (A, u) {
     }
     if (u.character == "flagellant") && (u.level == 3) {
         set u.flagellant_hp_m = 2
+    }
+    ;; the passives (`player.lua:906-1000`, `1265-1325`)
+    val i = do {
+        var n = -1
+        loop k, o in A.units {
+            if o == u {
+                set n = k
+            }
+        }
+        n
+    }
+    if u.centipede {
+        set u.centipede_mvspd_m = lv(u.centipede, 1.1, 1.2, 1.3)
+    }
+    if u.amplify {
+        set u.amplify_area_dmg_m = lv(u.amplify, 1.2, 1.35, 1.5)
+    }
+    if u.ballista && X.xin(u.character, PROJECTILE_CHARACTERS) {
+        set u.ballista_dmg_m = lv(u.ballista, 1.2, 1.35, 1.5)
+    }
+    if u.chronomancy && has_class(u, "mage") {
+        set u.chronomancy_aspd_m = lv(u.chronomancy, 1.15, 1.25, 1.35)
+    }
+    if u.magnify {
+        set u.magnify_area_size_m = lv(u.magnify, 1.2, 1.35, 1.5)
+    }
+    if u.berserking && has_class(u, "warrior") {
+        set u.berserking_aspd_m = remap(u.hp/u.max_hp, 0, 1, lv(u.berserking, 1.5, 1.75, 2), 1)
+    }
+    if u.speed_3 && (i == 2) {
+        set u.speed_3_aspd_m = 1.5
+    }
+    if u.damage_4 && (i == 3) {
+        set u.damage_4_dmg_m = 1.3
+    }
+    ;; the stances: the leader and the last follower (they keep it)
+    if (i == 0) || ((i > 0) && (i == (#A.units - 1))) {
+        if u.defensive_stance {
+            set u.defensive_stance_def_m = lv(u.defensive_stance, 1.1, 1.2, 1.3)
+        }
+        if u.offensive_stance {
+            set u.offensive_stance_dmg_m = lv(u.offensive_stance, 1.1, 1.2, 1.3)
+        }
+    }
+    if (i == 0) && (#A.units == 1) && u.last_stand {
+        set u.last_stand_dmg_m = 1.2
+        set u.last_stand_def_m = 1.2
+        set u.last_stand_aspd_m = 1.2
+        set u.last_stand_area_size_m = 1.2
+        set u.last_stand_area_dmg_m = 1.2
+        set u.last_stand_mvspd_m = 1.2
+    }
+    if u.dividends && has_class(u, "mercenary") {
+        set u.dividends_dmg_m = 1 + (A.run.gold || 0)/100
+    }
+    if u.blessing {
+        set u.heal_effect_m = lv(u.blessing, 1.1, 1.2, 1.3)
+    }
+    if u.haste {
+        set u.haste_mvspd_m = if u.hasted => math.max(1, math.min(remap(eng.tick()/60 - u.hasted, 0, 4, 1.5, 1), 1.5)) => 1
+    }
+    ;; the leader holding left for more than 1s gives defense to all
+    if (i == 0) && u.ouroboros_technique_l {
+        val d = if held_for(:left, 1) => lv(u.ouroboros_technique_l, 1.15, 1.25, 1.35) => 1
+        loop _, o in A.units {
+            set o.ouroboros_def_m = d
+        }
     }
     val m = \(k) { u@(k) || 1 }
     buffs_reset(u)
