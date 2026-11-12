@@ -189,7 +189,8 @@ task EliteAttack (A, e, fx, shots) {
             loop {
                 ;; as `set_every_multiplier('shooter', ...)` of the update
                 await((rfloat(4, 6)*(1 - math.min(e.level*0.02, 0.25))) * 1s)
-                loop i in 3 {
+                ;; not while silenced or stunned
+                loop i in (if e.silenced || e.stunned => 0 => 3) {
                     if i > 0 {
                         await((math.max(1 - e.level*0.01, 0.25)*0.15) * 1s)
                     }
@@ -212,10 +213,12 @@ task EliteAttack (A, e, fx, shots) {
                 }
             }
             loop {
-                ;; near the leader, and 10s after the last headbutt
+                ;; near the leader, and 10s after the last headbutt (not while
+                ;; silenced or stunned)
                 loop on :clock {
                     val l = A.units@0
-                    until l && (math.sqrt((e.x - l.x)*(e.x - l.x) + (e.y - l.y)*(e.y - l.y)) < 76)
+                    until l && (math.sqrt((e.x - l.x)*(e.x - l.x) + (e.y - l.y)*(e.y - l.y)) < 76) &&
+                          !e.silenced && !e.stunned
                 }
                 ;; charges for 2s, turning white
                 set e.aiming += 1

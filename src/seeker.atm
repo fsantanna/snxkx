@@ -66,6 +66,36 @@ task Seeker (A, e, fx, shots) {
             spawn @dots Dot(e, d.dmg, d.duration, d.color, fx)
         }
     }
+    pin curses = tasks()
+    spawn {
+        loop c on :Curse until it.to == e {
+            play(buff1, [pitch=rfloat(0.65, 0.75), volume=0.25])
+            match c.kind {
+                :launcher => spawn @curses LauncherCurse(e, c)
+                :jester => spawn @curses Cursed(e, "jester", [ lvl3=c.a1, ref=c.a2 ], c.duration)
+                :bane => spawn @curses Cursed(e, "bane", [ lvl3=c.a1, ref=c.a2 ], c.duration)
+                :infestor => spawn @curses Cursed(e, "infested", [ n=c.a1, dmg=c.a2, ref=c.a3 ], c.duration)
+                :silencer => spawn @curses Cursed(e, "silenced", true, c.duration)
+                :usurer => {
+                    if c.a1 {
+                        set e.usurer_count = (e.usurer_count || 0) + 1
+                        if e.usurer_count == 3 {
+                            play(usurer1, [pitch=rfloat(0.95, 1.05), volume=1])
+                            play(rogue_crit1, [pitch=rfloat(0.95, 1.05), volume=1])
+                            shake(4, 0.4)
+                            set e.usurer_count = 0
+                            hit(e, 50*c.a2.dmg)
+                        }
+                    }
+                }
+            }
+        }
+    }
+    spawn {
+        loop t on :Stun until it.to == e {
+            spawn @curses TimedField(e, "stunned", true, false, t.d)
+        }
+    }
     spawn {
         if e.boss {
             await BossAttack(A, e, fx)
@@ -107,6 +137,15 @@ task Seeker (A, e, fx, shots) {
         loop c on :collision.enter until (it.b == e.b) && (it.other.kind == :wall) {
             spawn @fxs HfxUse(e.hit, 0.15, 200, 10, 0.1)
             bounce(e, c.nx, c.ny)
+            ;; thrown by a juggernaut or a launcher, it hurts itself
+            if e.juggernaut_push {
+                hit(e, e.juggernaut_push)
+                play(hit2, [pitch=rfloat(0.95, 1.05), volume=0.35])
+            }
+            if e.launcher_push {
+                hit(e, e.launcher_push)
+                play(hit2, [pitch=rfloat(0.95, 1.05), volume=0.35])
+            }
         }
     }
 
@@ -235,6 +274,8 @@ task Seeker (A, e, fx, shots) {
                 until p == nil
             }
             set e.push_invulnerable = false
+            set e.juggernaut_push = nil
+            set e.launcher_push = nil
             body_set(e.b, :damping, 0)
             body_set(e.b, :angular_damping, 0)
         }
@@ -242,6 +283,35 @@ task Seeker (A, e, fx, shots) {
 
     ;; death, as the end of `Seeker:hit`
     trace("enemy.die", e.boss || e.elite || "seeker")
+    ;; the curses act on death
+    if last && last.pyrod {
+        val d = last.pyrod
+        spawn @fx Area(A, [x=e.x, y=e.y, color=red@0, w=32*d.parent.area_size_m, r=rfloat(0, 2*math.pi),
+            dmg=d.parent.area_dmg_m*d.dmg, character=d.character, level=d.level, parent=d.parent], fx)
+    }
+    if e.jester {
+        val j = e.jester.v
+        play(rtable([scout1, scout2]), [pitch=rfloat(0.95, 1.05), volume=0.35])
+        spawn @fx HitCircle(e.x, e.y, [rs=6])
+        var r = rfloat(0, 2*math.pi)
+        loop _ in 4 {
+            spawn @shots Projectile(A, [x=e.x + 8*math.cos(r), y=e.y + 8*math.sin(r), v=250, r=r, color=red@0,
+                dmg=j.ref.dmg, pierce=(if j.lvl3 => 2 => 0), homing=j.lvl3, character=j.ref.character, parent=j.ref], fx)
+            set r += math.pi/2
+        }
+    }
+    if e.bane {
+        val b = e.bane.v.ref
+        spawn @fx DotArea(A, [x=e.x, y=e.y, rs=(if b.level == 3 => 2 => 1)*b.area_size_m*27, color=purple@0,
+            dmg=b.area_dmg_m*b.dmg*(b.dot_dmg_m || 1), void_rift=true, duration=1], fx)
+    }
+    if e.infested {
+        val f = e.infested.v
+        play(critter1, [pitch=rfloat(0.95, 1.05), volume=0.5])
+        loop _ in f.n {
+            spawn @shots Critter(A, e.x, e.y, rfloat(0, 2*math.pi), 10, f.dmg, f.ref, fx)
+        }
+    }
     val pj = last && last.projectile
     if pj && pj.spawn_critters_on_kill {
         play(critter1, [pitch=rfloat(0.95, 1.05), volume=0.5])
@@ -253,10 +323,11 @@ task Seeker (A, e, fx, shots) {
         slow(0.25, 1)
         play(magic_die1, [pitch=rfloat(0.95, 1.05), volume=0.5])
     }
-    if e.elite == "speed_booster" {
+    val quiet = e.silenced || e.stunned         ;; no last act
+    if (e.elite == "speed_booster") && !quiet {
         spawn @fx BoostAround(A, e, nil, 3, fx)
     }
-    if e.elite == "exploder" {
+    if (e.elite == "exploder") && !quiet {
         play(mine1, [pitch=rfloat(0.95, 1.05), volume=0.5])
         spawn @shots ExploderMine(A, e.x, e.y, e, fx, shots)
     }
@@ -296,5 +367,36 @@ task Dot (e, dmg, duration, color, fx) {
         spawn @fx HitCircle(e.x, e.y, [rs=6, color=fg@0, duration=0.1])
         spawn @fx HitParticle(e.x, e.y, [color=e.color])
         spawn @fx HitParticle(e.x, e.y, [color=color || purple@0])
+    }
+}
+
+;; A curse of a kind, as the tagged timer of the original: the field holds
+;; it for `d` seconds, and a new curse of the kind replaces it (the old one
+;; then expires without clearing it).
+task Cursed (e, k, v, d) {
+    val token = [ v=v ]
+    set e@(k) = token
+    await(d * 1s)
+    if e@(k) == token {
+        set e@(k) = nil
+    }
+}
+
+;; A field for a while, and back (as `t:after(d, ...)` with no tag).
+task TimedField (e, k, v, back, d) {
+    set e@(k) = v
+    await(d * 1s)
+    set e@(k) = back
+}
+
+;; The curse of the launcher: after it, the enemy flies along an axis, and
+;; hits itself on the wall (`launcher_push`).
+task LauncherCurse (e, c) {
+    val token = []
+    set e.launcher_curse = token
+    await(c.duration * 1s)
+    if e.launcher_curse == token {
+        set e.launcher_push = c.a1
+        push(e, rfloat(50, 75)*(c.a2.knockback_m || 1), rtable([0, math.pi, math.pi/2, -math.pi/2]))
     }
 }

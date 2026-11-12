@@ -121,15 +121,49 @@ task Barrage (A, u, r, n, o, fx, shots) {
     }
 }
 
-;; As `Player:attack(area, mods)`: an area at the unit, or at `x`, `y`.
-task Attack (A, u, size, at, fx) {
+;; As `Player:attack(area, mods)`: an area at the unit, or at `mods.x`,
+;; `mods.y`; `mods` may also stun or push (`stun`, `juggernaut_push`).
+task Attack (A, u, size, mods, fx) {
     shake(2, 0.5)
     spawn @fx HfxUse(u.shoot, 0.25)
-    spawn @fx Area(A, [x=at && at.x || u.x, y=at && at.y || u.y, r=u.r, w=u.area_size_m*size,
-                       color=u.color, dmg=u.area_dmg_m*u.dmg, character=u.character], fx)
-    if u.character == "swordsman" {
-        play(rtable([swordsman1, swordsman2]), [pitch=rfloat(0.9, 1.1), volume=0.75])
+    val m = mods || []
+    spawn @fx Area(A, [x=m.x || u.x, y=m.y || u.y, r=u.r, w=u.area_size_m*(size || 64), color=u.color,
+                       dmg=u.area_dmg_m*u.dmg, character=u.character, level=u.level, parent=u,
+                       stun=m.stun, juggernaut_push=m.juggernaut_push], fx)
+    val c = u.character
+    ifs {
+        X.xin(c, ["swordsman", "barbarian", "juggernaut", "highlander"]) =>
+            play(rtable([swordsman1, swordsman2]), [pitch=rfloat(0.9, 1.1), volume=0.75])
+        c == "elementor" => play(elementor1, [pitch=rfloat(0.9, 1.1), volume=0.5])
+        c == "psychic" => play(psychic1, [pitch=rfloat(0.9, 1.1), volume=0.4])
+        c == "launcher" => play(buff1, [pitch=rfloat(0.9, 1.1), volume=0.5])
     }
+    if c == "juggernaut" {
+        play(elementor1, [pitch=rfloat(0.9, 1.1), volume=0.5])
+    }
+}
+
+;; As `Player:dot_attack(area, mods)`: a damage over time area at the unit
+;; (after `d` seconds, for a repeat).
+task DotAttack (A, u, size, mods, fx, d) {
+    await(d * 1s)
+    shake(2, 0.5)
+    spawn @fx HfxUse(u.shoot, 0.25)
+    spawn @fx DotArea(A, [x=u.x, y=u.y, r=u.r, rs=u.area_size_m*(size || 64), color=u.color,
+        dmg=u.area_dmg_m*u.dmg*(u.dot_dmg_m || 1), character=u.character, level=u.level, parent=u] ++ (mods || []), fx)
+    play(dot1, [pitch=rfloat(0.9, 1.1), volume=0.5])
+}
+
+;; The enemies a curser curses: a random few of those within 128, as
+;; `table.first2(table.shuffle(...), n)`, `n` more with the cursers.
+func curse_targets (A, u, n) {
+    val es = enemies_in_circle(A, u.x, u.y, 128)
+    val out = []
+    loop _ in math.min(n + (match A.cl.curser { 2 => 3 ; 1 => 1 ; else => 0 })
+                         + (match u.malediction { 1 => 1 ; 2 => 3 ; 3 => 5 ; else => 0 }), #es) {
+        set out@+ = rtable_remove(es)
+    }
+    out
 }
 
 ;; A place in the arena with no body on it, as the cleric looks for one.
@@ -394,6 +428,234 @@ task Character (A, u, fx, shots) {
                 spawn @acts Construct(A, u, 0.25, fx, shots)
             }
         }
+        "elementor" => loop {
+            await Cooldown(u, 7, \{ near(128) })
+            val e = random_enemy(A, u.x, u.y, 128)
+            if e { spawn @acts Attack(A, u, 128, [x=e.x, y=e.y], fx) }
+        }
+        "psychic" => do {
+            val rs = if u.level == 3 => 512 => 64
+            loop {
+                await Cooldown(u, 3, \{ near(rs) })
+                spawn @acts PsychicStrike(A, u, rs, 0, fx)
+                if sorcerer_due(A, u) {
+                    spawn @acts PsychicStrike(A, u, rs, 0.1, fx)
+                }
+            }
+        }
+        "barbarian" => loop {
+            await Cooldown(u, 8, \{ near(48) })
+            spawn @acts Attack(A, u, 96, [stun=4], fx)
+        }
+        "juggernaut" => loop {
+            await Cooldown(u, 8, \{ near(64) })
+            spawn @acts Attack(A, u, 128, [juggernaut_push=true], fx)
+        }
+        "highlander" => loop {
+            await Cooldown(u, 4, \{ near(36) })
+            if u.level == 3 {
+                spawn @acts Strikes(A, u, fx)
+            } else {
+                spawn @acts Attack(A, u, 72, nil, fx)
+            }
+        }
+        "launcher" => loop {
+            await Cooldown(u, 6, \{ near(96) })
+            play(buff1, [pitch=rfloat(0.9, 1.1), volume=0.5])
+            loop _, e in A.enemies {
+                if math.sqrt((e.x - u.x)*(e.x - u.x) + (e.y - u.y)*(e.y - u.y)) < 128 {
+                    curse(e, :launcher, 4*(u.hex_duration_m || 1), if u.level == 3 => 6*u.dmg => 2*u.dmg, u)
+                    spawn @fx HitCircle(u.x, u.y, [rs=6, color=yellow@0, duration=0.1])
+                    spawn @fx LightningLine(u, e, yellow@0, fx)
+                }
+            }
+        }
+        "jester" => loop {
+            await Cooldown(u, 6, \{ near(96) })
+            play(buff1, [pitch=rfloat(0.9, 1.1), volume=0.5])
+            loop _, e in curse_targets(A, u, 6) {
+                curse(e, :jester, 6*(u.hex_duration_m || 1), u.level == 3, u)
+                spawn @fx HitCircle(u.x, u.y, [rs=6, color=red@0, duration=0.1])
+                spawn @fx LightningLine(u, e, red@0, fx)
+            }
+        }
+        "bane" => loop {
+            await Cooldown(u, 6, \{ near(96) })
+            play(buff1, [pitch=rfloat(0.9, 1.1), volume=0.5])
+            loop _, e in curse_targets(A, u, 6) {
+                curse(e, :bane, 6*(u.hex_duration_m || 1), u.level == 3, u)
+                spawn @fx HitCircle(u.x, u.y, [rs=6, color=purple@0, duration=0.1])
+                spawn @fx LightningLine(u, e, purple@0, fx)
+            }
+        }
+        "infestor" => loop {
+            await Cooldown(u, 6, \{ near(96) })
+            play(buff1, [pitch=rfloat(0.9, 1.1), volume=0.5])
+            loop _, e in curse_targets(A, u, 8) {
+                curse(e, :infestor, 6*(u.hex_duration_m || 1), if u.level == 3 => 6 => 2, u.dmg, u)
+                spawn @fx HitCircle(u.x, u.y, [rs=6, color=orange@0, duration=0.1])
+                spawn @fx LightningLine(u, e, orange@0, fx)
+            }
+        }
+        "usurer" => loop {
+            await Cooldown(u, 6, \{ near(96) })
+            play(buff1, [pitch=rfloat(0.9, 1.1), volume=0.5])
+            loop _, e in curse_targets(A, u, 3) {
+                curse(e, :usurer, 10000, u.level == 3, u)
+                dot(e, u.dmg*(u.dot_dmg_m || 1)*(A.chronomancer_dot || 1), 10000)
+                spawn @fx HitCircle(u.x, u.y, [rs=6, color=purple@0, duration=0.1])
+                spawn @fx LightningLine(u, e, purple@0, fx)
+            }
+        }
+        "silencer" => loop {
+            await Cooldown(u, 6, \{ near(96) })
+            spawn @acts Silence(A, u, 0, fx)
+            if sorcerer_due(A, u) {
+                spawn @acts Silence(A, u, 0.5, fx)
+            }
+        }
+        "witch" => do {
+            val tk = [ t=0 ]
+            loop {
+                await Every(u, 4, tk)
+                spawn @acts DotAttack(A, u, 42, [duration=rfloat(12, 16)], fx, 0)
+                if sorcerer_due(A, u) {
+                    spawn @acts DotAttack(A, u, 42, [duration=rfloat(12, 16)], fx, 0.25)
+                }
+            }
+        }
+        "plague_doctor" => do {
+            if u.level == 3 {
+                spawn @fx DotArea(A, [x=u.x, y=u.y, rs=u.area_size_m*48, color=u.color, dmg=u.area_dmg_m*u.dmg,
+                                      character=u.character, level=u.level, parent=u], fx)
+            }
+            val tk = [ t=0 ]
+            loop {
+                await Every(u, 5, tk)
+                spawn @acts DotAttack(A, u, 24, [duration=12, plague_doctor_unmovable=true], fx, 0)
+            }
+        }
+        "cryomancer" => do {
+            spawn @fx DotArea(A, [x=u.x, y=u.y, rs=u.area_size_m*72, color=u.color, dmg=u.area_dmg_m*u.dmg,
+                                  character=u.character, level=u.level, parent=u], fx)
+            await(false)
+        }
+        "pyromancer" => do {
+            spawn @fx DotArea(A, [x=u.x, y=u.y, rs=u.area_size_m*48, color=u.color, dmg=u.area_dmg_m*u.dmg,
+                                  character=u.character, level=u.level, parent=u], fx)
+            await(false)
+        }
+        "psykino" => do {
+            val tk = [ t=0 ]
+            loop {
+                await Every(u, 4, tk)
+                val e = random_enemy(A, u.x, u.y, 160)
+                if e {
+                    spawn @fx ForceArea(A, [x=e.x, y=e.y, rs=u.area_size_m*64, color=u.color,
+                                            character=u.character, level=u.level, parent=u], fx)
+                }
+            }
+        }
+        "vulcanist" => do {
+            val tk = [ t=0 ]
+            loop {
+                await Every(u, 12, tk)
+                spawn @acts Erupt(A, u, 0, fx)
+                if sorcerer_due(A, u) {
+                    spawn @acts Erupt(A, u, 0.5, fx)
+                }
+            }
+        }
+        "saboteur" => loop {
+            await 8s
+            spawn @acts Saboteurs(A, u, fx)
+        }
+        "bomber" => loop {
+            await 8s
+            spawn @acts BombDrop(A, u, fx)
+        }
+        "carver" => loop {
+            await 16s
+            spawn @fx Tree(A, u.x, u.y, u, fx)
+        }
+        "engineer" => do {
+            if u.level == 3 {
+                spawn @acts Upgrades(A, u, fx, shots)
+            }
+            loop {
+                await 8s
+                spawn @acts TurretDrop(A, u, u.x, u.y, fx, shots)
+            }
+        }
+        "host" => loop {
+            await((if u.level == 3 => 1 => 2) * 1s)
+            play(critter1, [pitch=rfloat(0.95, 1.05), volume=0.35])
+            loop _ in (if u.level == 3 => 2 => 1) {
+                spawn @shots Critter(A, u.x, u.y, rfloat(0, 2*math.pi), 10, u.dmg, u, fx)
+            }
+        }
+        "gambler" => do {
+            val tk = [ t=0 ]
+            loop {
+                await Every(u, 2, tk)
+                spawn @acts Gamble(A, u, fx)
+            }
+        }
+        "stormweaver" => loop {
+            await 8s
+            play(stormweaver1, [pitch=rfloat(0.95, 1.05), volume=0.5])
+            loop _, o in A.units {
+                emit @:global :Infuse [ to=o, d=4 ]
+            }
+        }
+        "chronomancer" => do {
+            if u.level == 3 {
+                set A.chronomancer_dot = 0.5
+            }
+            await(false)
+        }
+        "fairy" => loop {
+            await 6s
+            spawn @acts Bless(A, u, fx)
+        }
+        "warden" => loop {
+            await 12s
+            spawn @acts Ward(A, u, 0, fx)
+            if sorcerer_due(A, u) {
+                spawn @acts Ward(A, u, 0.5, fx)
+            }
+        }
+        "priest" => do {
+            if u.level == 3 {
+                val us = []
+                loop _, o in A.units {
+                    set us@+ = o
+                }
+                loop _ in math.min(3, #us) {
+                    set (rtable_remove(us)).divined = true
+                }
+            }
+            loop {
+                await 12s
+                val x = rfloat(A.x1 + 16, A.x2 - 16)
+                val y = rfloat(A.y1 + 16, A.y2 - 16)
+                loop _ in 3 {
+                    spawn @fx HealAt(A, x, y, fx)
+                }
+            }
+        }
+        "flagellant" => loop {
+            await 8s
+            play(buff1, [pitch=rfloat(0.95, 1.05), volume=0.3])
+            play(flagellant1, [pitch=rfloat(0.95, 1.05), volume=0.4])
+            loop _, o in A.units {
+                if o.character == "flagellant" {
+                    play(hit2, [pitch=rfloat(0.95, 1.05), volume=0.4])
+                    hit(o, 2*o.dmg)             ;; `self.level == unit.dmg or 2*unit.dmg`
+                }
+                set o.flagellant_dmg_m = (o.flagellant_dmg_m || 1) + (if u.level == 3 => 0.12 => 0.04)
+            }
+        }
         "cleric" => loop {
             await 8s
             loop _ in (if u.level == 3 => 4 => 1) {
@@ -437,6 +699,239 @@ task Construct (A, u, d, fx, shots) {
     if #enemies_in_circle(A, u.x, u.y, 2) == 0 {
         spawn @shots Automaton(A, x, y, u, fx, shots)
     }
+}
+
+;;; THE ATTACKS OF THE CHARACTERS ;;;
+
+;; The psychic strikes a random enemy around it with a small area (and
+;; another one 0.5s later at level 3).
+task PsychicStrike (A, u, rs, d, fx) {
+    await(d * 1s)
+    val e = random_enemy(A, u.x, u.y, rs)
+    if e {
+        await Attack(A, u, 32, [x=e.x, y=e.y], fx)
+        if u.level == 3 {
+            await 500ms
+            val e2 = random_enemy(A, u.x, u.y, rs)
+            if e2 {
+                await Attack(A, u, 32, [x=e2.x, y=e2.y], fx)
+            }
+        }
+    }
+}
+
+;; The highlander of level 3 strikes three times, 0.25s apart.
+task Strikes (A, u, fx) {
+    loop _ in 3 {
+        await 250ms
+        await Attack(A, u, 72, nil, fx)
+    }
+}
+
+;; The silencer silences a few enemies around it (and damages them over
+;; time at level 3).
+task Silence (A, u, d, fx) {
+    await(d * 1s)
+    play(buff1, [pitch=rfloat(0.9, 1.1), volume=0.5])
+    loop _, e in curse_targets(A, u, 6) {
+        curse(e, :silencer, 6*(u.hex_duration_m || 1), u.level == 3, u)
+        if u.level == 3 {
+            dot(e, u.dmg*(u.dot_dmg_m || 1)*(A.chronomancer_dot || 1), 6*(u.hex_duration_m || 1))
+        }
+        spawn @fx HitCircle(u.x, u.y, [rs=6, color=blue2@0, duration=0.1])
+        spawn @fx LightningLine(u, e, blue2@0, fx)
+    }
+}
+
+;; Whether nothing is at a place (a unit, an enemy, a critter).
+func free_at (A, x, y, rs) {
+    var free = true
+    loop _, l in [A.units, A.enemies, A.critters] {
+        loop _, o in l {
+            if circle_hits(x, y, rs, o) {
+                set free = false
+            }
+        }
+    }
+    free
+}
+
+;; The vulcanist raises a volcano halfway between itself and the middle
+;; of the enemies, as soon as the place is free (tried every 0.1s).
+task Erupt (A, u, d, fx) {
+    await(d * 1s)
+    var x, y = 0, 0
+    if #A.enemies > 0 {
+        loop _, e in A.enemies {
+            set x += e.x
+            set y += e.y
+        }
+        set x = x/#A.enemies
+        set y = y/#A.enemies
+    }
+    if (x == 0) && (y == 0) {
+        set x, y = W/2, H/2
+    }
+    set x, y = (x + u.x)/2, (y + u.y)/2
+    loop {
+        until free_at(A, x, y, 2)
+        await 100ms
+    }
+    spawn @fx Volcano(A, x, y, u, fx)
+}
+
+;; The saboteur calls two saboteurs, 0.25s apart, each out of a spawn
+;; effect at itself.
+task Saboteurs (A, u, fx) {
+    pin ss = tasks()
+    loop _ in 2 {
+        await 250ms
+        spawn @ss SaboteurDrop(A, u, fx)
+    }
+    await :all ss
+}
+
+task SaboteurDrop (A, u, fx) {
+    val x, y = u.x, u.y
+    await SpawnEffect(x, y, u.color, fx)
+    spawn @fx Saboteur(A, x, y, u, (u.level == 3) && rbool(50), fx)
+}
+
+task BombDrop (A, u, fx) {
+    val x, y = u.x, u.y
+    await SpawnEffect(x, y, u.color, fx)
+    spawn @fx Bomb(A, x, y, u, fx)
+}
+
+task TurretDrop (A, u, x, y, fx, shots) {
+    await SpawnEffect(x, y, orange@0, fx)
+    spawn @shots Turret(A, x, y, u, fx, shots)
+}
+
+;; The engineer of level 3, every 24s: two more turrets, and all of them
+;; upgraded.
+task Upgrades (A, u, fx, shots) {
+    pin ds = tasks()
+    loop {
+        await 24s
+        spawn @ds TurretDrop(A, u, u.x - 16, u.y + 16, fx, shots)
+        spawn @ds TurretDrop(A, u, u.x + 16, u.y + 16, fx, shots)
+        await 500ms
+        play(buff1, [pitch=rfloat(0.95, 1.05), volume=0.5])
+        loop _, t in A.turrets {
+            spawn @fx HitCircle(u.x, u.y, [rs=6, color=orange@0, duration=0.1])
+            spawn @fx LightningLine(u, t, orange@0, fx)
+            emit @:global :Upgrade [ to=t ]
+        }
+    }
+}
+
+;; The gambler hits a random enemy for twice the gold of the run, with a
+;; chance of more casts at level 3; the sorcerers repeat it.
+task Gamble (A, u, fx) {
+    pin cs = tasks()
+    spawn @cs Cast(A, u, 1, 0)
+    if (u.level == 3) && rbool(60) {
+        val n = if rbool(40) => (if rbool(20) => 3 => 2) => 1
+        loop i in n {
+            spawn @cs Cast(A, u, 1.1 + i*0.1, 0.25*(i + 1))
+        }
+    }
+    await :all cs
+}
+
+task Cast (A, u, pitch, d) {
+    await(d * 1s)
+    val gold = A.run && A.run.gold || 0
+    val vol = math.max(0, math.min(remap(gold, 0, 50, 0, 0.5), 0.75))
+    if #A.enemies > 0 {
+        play(gambler1, [pitch=pitch, volume=vol])
+        hit(rtable(A.enemies), 2*gold)
+        if sorcerer_due(A, u) {
+            await 250ms
+            if #A.enemies > 0 {
+                play(gambler1, [pitch=pitch + 0.05, volume=vol])
+                hit(rtable(A.enemies), 2*gold)
+            }
+        }
+    }
+}
+
+;; A unit that attacks, at random (the fairy skips the others).
+func attacking_unit (A) {
+    if #A.units == 0 {
+        return nil
+    }
+    var u = rtable(A.units)
+    var runs = 0
+    loop {
+        while X.xin(u.character, non_attacking_characters) && (runs < 1000)
+        set u = rtable(A.units)
+        set runs += 1
+    }
+    u
+}
+
+;; The fairy speeds up the attacks of one unit (two at level 3, more) for
+;; 6s, and grows healing orbs (one, two at level 3).
+task Bless (A, u, fx) {
+    val n = if u.level == 3 => 2 => 1
+    loop _ in n {
+        val o = attacking_unit(A)
+        if o {
+            spawn @fx TimedBuff(o, "fairy_aspd_m", if u.level == 3 => 3 => 2, 5.98)
+        }
+    }
+    play(heal1, [pitch=rfloat(0.95, 1.05), volume=0.5])
+    play(buff1, [pitch=rfloat(0.95, 1.05), volume=0.5])
+    loop _ in n {
+        val x, y = free_place(A)
+        spawn @fx HealAt(A, x, y, fx)
+    }
+}
+
+;; The warden puts a force field around a random unit (two at level 3),
+;; as soon as no enemy is on it (tried every 0.1s).
+task Ward (A, u, d, fx) {
+    await(d * 1s)
+    val us = []
+    loop _, o in A.units {
+        set us@+ = o
+    }
+    if #us == 0 {
+        return nil
+    }
+    if u.level == 3 {
+        val u1 = rtable_remove(us)
+        val u2 = if #us > 0 => rtable_remove(us) => nil
+        play(illusion1, [pitch=rfloat(0.95, 1.05), volume=0.5])
+        spawn @fx WardWhenFree(A, u1, fx)
+        if u2 {
+            play(illusion1, [pitch=rfloat(0.95, 1.05), volume=0.5])
+            spawn @fx ForceField(A, u2, fx)        ;; and another one when free, as the original
+            spawn @fx WardWhenFree(A, u2, fx)
+        }
+    } else {
+        play(illusion1, [pitch=rfloat(0.95, 1.05), volume=0.5])
+        spawn @fx WardWhenFree(A, rtable(us), fx)
+    }
+}
+
+task WardWhenFree (A, o, fx) {
+    loop {
+        val busy = do {
+            var b = false
+            loop _, e in A.enemies {
+                if circle_hits(o.x, o.y, 6, e) {
+                    set b = true
+                }
+            }
+            b
+        }
+        until !busy
+        await 100ms
+    }
+    await ForceField(A, o, fx)
 }
 
 ;; A spawn effect in green, and an orb at its peak if nothing is there.

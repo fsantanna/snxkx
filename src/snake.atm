@@ -44,6 +44,18 @@ func dot (to, dmg, duration, color) {
     emit @:global :Dot [ to=to, dmg=dmg, duration=duration, color=color ]
 }
 
+;; As `Seeker:curse(kind, duration, a1, a2, a3)`.
+func curse (to, kind, duration, a1, a2, a3) {
+    emit @:global :Curse [ to=to, kind=kind, duration=duration, a1=a1, a2=a2, a3=a3 ]
+}
+
+;; A stun, as the barbarian and the stunning strike: slowed to 0.1, no
+;; attacks, and twice the damage, for `d` seconds.
+func stun (to, d) {
+    slow_enemy(to, 0.1, d)
+    emit @:global :Stun [ to=to, d=d ]
+}
+
 ;; The slow motion of the original (`slow(amount, duration)` in
 ;; `shared.lua`): the game time drops to `amount` and comes back to
 ;; normal along `duration`, in real time. A new slow restarts it.
@@ -138,6 +150,13 @@ task Unit (A, u, fx, shots) {
         }
     }
 
+    ;; the chain infusion of the stormweaver (`chain_infuse`, a tagged timer)
+    spawn {
+        loop i on :Infuse until it.to == u {
+            spawn @fxs Cursed(u, "chain_infused", true, i.d)
+        }
+    }
+
     ;; heals, as `Player:heal`
     spawn {
         loop e on :Heal until it.to == u {
@@ -210,6 +229,34 @@ task Unit (A, u, fx, shots) {
             shake(4, 0.5)
             set A.damage_taken += dmg
             trace("unit.hit", u.character ++ " " ++ string.format("%.1f", u.hp))
+            if u.character == "psykeeper" {
+                ;; it stores the damage, and turns it into healing orbs
+                set u.stored_heal = (u.stored_heal || 0) + dmg
+                if u.stored_heal > (0.25*u.max_hp) {
+                    set u.stored_heal = 0
+                    val x, y = free_place(A)
+                    loop _ in 3 {
+                        spawn @fx HealAt(A, x, y, fx)
+                    }
+                }
+                if u.level == 3 {
+                    val es = A.enemies
+                    loop _, o in es {
+                        hit(o, 2*dmg/#es)
+                    }
+                }
+            }
+            if (u.hp <= 0) && u.divined {
+                ;; the priest of level 3 saves it once
+                set u.hp = u.max_hp
+                play(heal1, [pitch=rfloat(0.95, 1.05), volume=0.5])
+                play(buff1, [pitch=rfloat(0.95, 1.05), volume=0.5])
+                loop _ in rint(4, 6) {
+                    spawn @fx HitParticle(u.x, u.y, [color=u.color])
+                }
+                spawn @fx HitCircle(u.x, u.y, [rs=12, scale_down=true, duration=0.3, change_color=[0.5, u.color]])
+                set u.divined = false
+            }
             until u.hp <= 0
         }
     } with {
