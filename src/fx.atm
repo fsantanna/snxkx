@@ -1,0 +1,156 @@
+;; The camera and the effects of hits, as `Camera` of the engine of the
+;; original and `HitCircle`, `HitParticle`, `HitFX` of `shared.lua`.
+
+;;; CAMERA ;;;
+
+;; The camera of the world: the point at the center of the screen, a
+;; rotation, shakes, and two springs for kicks. As the original, it is
+;; one for the whole game, and moves in real time.
+val CAM = [
+    x=W/2, y=H/2, r=0,
+    shakes=[],                  ;; [amp, dur (ms), freq, xs, ys, t0 (ms)]
+    sx=spring(0), sy=spring(0),
+    lx=0, ly=0,                 ;; the shake of the last tick
+]
+
+;; As `camera:shake(intensity, duration, frequency)`.
+func shake (intensity, duration, frequency) {
+    val f = frequency || 60
+    val d = 1000*(duration || 0)
+    val xs = []
+    val ys = []
+    loop i in (1, math.floor((d/1000)*f)) {
+        set xs@(i) = 2*math.random() - 1
+    }
+    loop i in (1, math.floor((d/1000)*f)) {
+        set ys@(i) = 2*math.random() - 1
+    }
+    set CAM.shakes@+ = [ amp=intensity, dur=d, freq=f, xs=xs, ys=ys, t0=1000*eng.tick()/60 ]
+}
+
+;; As `camera:spring_shake(intensity, r, k, d)`.
+func spring_shake (intensity, r, k, d) {
+    spring_pull(CAM.sx, -intensity*math.cos(r || 0), k, d)
+    spring_pull(CAM.sy, -intensity*math.sin(r || 0), k, d)
+}
+
+;; The amplitude of a shake at t ms (as `Shake:get_amplitude`).
+func shake_amp (s, xs, t) {
+    if t > s.dur {
+        return 0
+    }
+    val p = (t/1000)*s.freq
+    val p0 = math.floor(p)
+    val n0 = xs@(p0) || 0
+    val n1 = xs@(p0+1) || 0
+    s.amp * (n0 + (p - p0)*(n1 - n0)) * ((s.dur - t)/s.dur)
+}
+
+;; Moves the camera in every real tick, as `Camera:update`.
+task Camera () {
+    loop e on :tick {
+        val dt = e.us / 1000000
+        val now = 1000*eng.tick()/60
+        var ax, ay = 0, 0
+        val keep = []
+        loop _, s in CAM.shakes {
+            val t = now - s.t0
+            if t <= s.dur {
+                set ax += shake_amp(s, s.xs, t)
+                set ay += shake_amp(s, s.ys, t)
+                set keep@+ = s
+            }
+        }
+        set CAM.shakes = keep
+        spring_update(CAM.sx, dt)
+        spring_update(CAM.sy, dt)
+        set ax += CAM.sx.x
+        set ay += CAM.sy.x
+        set CAM.x = CAM.x - CAM.lx + ax
+        set CAM.y = CAM.y - CAM.ly + ay
+        set CAM.lx = ax
+        set CAM.ly = ay
+    }
+}
+
+;; The transform of the camera, as `camera:attach()`; `eng.pop()` ends it.
+func cam_push () {
+    eng.push(0, 0, 0, 1)
+    eng.translate(W/2, H/2)
+    eng.rotate(CAM.r)
+    eng.translate(-CAM.x, -CAM.y)
+}
+
+;;; HIT EFFECTS ;;;
+
+;; A spring and a flash, as an entry of `HitFX`: `x` is the spring, `f`
+;; counts the flashes on (more than 0 is on).
+func hfx (x) {
+    [ s=spring(x || 1), f=0 ]
+}
+
+;; As `hfx:use(name, x, k, d, flash_duration)`: pulls the spring and
+;; flashes, as a task: the caller spawns it, and it ends with the caller.
+task HfxUse (h, x, k, d, dur) {
+    spring_pull(h.s, x, k, d)
+    set h.f += 1
+    defer {
+        set h.f -= 1
+    }
+    await((dur || 0.15) * 1s)
+}
+
+;; As `HitCircle`: a circle that lasts a moment. Options: `rs`, `color`,
+;; `duration`, `scale_down` (it shrinks instead of vanishing), and
+;; `change_color` ([m, color]: it changes color at m of its duration).
+task HitCircle (x, y, o) {
+    var rs = o.rs || 8
+    var color = o.color || fg@0
+    val dur = o.duration || 0.05
+    val st = [ rs=rs ]
+    spawn {
+        loop on :draw {
+            eng.circle(x, y, st.rs, color)
+        }
+    }
+    if o.change_color {
+        spawn {
+            await((o.change_color@0 * dur) * 1s)
+            set color = o.change_color@1
+        }
+    }
+    if o.scale_down {
+        await Tween(dur, st, [rs=0], cubic_in_out)
+    } else {
+        await(dur * 1s)
+    }
+}
+
+;; As `HitParticle`: a rounded rectangle that flies and shrinks.
+task HitParticle (x0, y0, o) {
+    val st = [
+        x = x0, y = y0,
+        v = o.v || rfloat(50, 150),
+        r = o.r || rfloat(0, 2*math.pi),
+        w = 0, h = 0,
+    ]
+    val dur = o.duration || rfloat(0.2, 0.6)
+    set st.w = o.w || rfloat(3.5, 7)
+    set st.h = o.h || (st.w/2)
+    val color = o.color || fg@0
+    spawn {
+        loop us on :clock {
+            val dt = us / 1000000
+            set st.x += st.v*math.cos(st.r)*dt
+            set st.y += st.v*math.sin(st.r)*dt
+        }
+    }
+    spawn {
+        loop on :draw {
+            eng.push(st.x, st.y, st.r)
+            eng.rect(st.x, st.y, st.w, st.h, 2, 2, color)
+            eng.pop()
+        }
+    }
+    await Tween(dur, st, [w=2, h=2, v=0], cubic_in_out)
+}
