@@ -1,0 +1,3 @@
+SNX_FRAMES=8000
+SNX_TRACE=1
+SNX_SHOT=400:$OUT/game-boss.png

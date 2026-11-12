@@ -1,0 +1,19 @@
+;; The ten characters of S6 against seekers, with no input: their
+;; attacks, heals, buffs, and summons, until the waves of level 1 end.
+include "../../src/game.atm"
+
+spawn Background()
+spawn Camera()
+spawn Input()
+spawn SlowMotion()
+
+val run = [ level=1, loop=0, gold=3, units=[
+    ["vagrant", 1], ["archer", 1], ["scout", 1], ["outlaw", 1], ["wizard", 1],
+    ["swordsman", 1], ["magician", 1], ["cleric", 1], ["squire", 1], ["sentry", 1],
+] ]
+val A = new_arena(1)
+set A.run = run
+spawn Arena(A)
+val e = await :goto
+print(eng.tick(), e.screen, run.gold)
+await 1s        ;; (doc/compiler.md, 5)

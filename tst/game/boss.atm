@@ -1,0 +1,17 @@
+;; Level 6, of a boss, from the countdown to its end.
+include "../../src/game.atm"
+
+spawn Background()
+spawn Camera()
+spawn Input()
+spawn SlowMotion()
+
+val run = [ level=6, loop=0, gold=3, units=[
+    ["vagrant", 3], ["archer", 3], ["wizard", 3], ["swordsman", 3], ["scout", 3], ["cleric", 3],
+] ]
+val A = new_arena(6)
+set A.run = run
+spawn Arena(A)
+val e = await :goto
+print(eng.tick(), e.screen, run.gold)
+await 1s        ;; (doc/compiler.md, 5)

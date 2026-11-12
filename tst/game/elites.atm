@@ -1,0 +1,20 @@
+;; The four elites and the boss of level 6 against a strong snake.
+include "../../src/game.atm"
+
+spawn Background()
+spawn Camera()
+spawn Input()
+spawn SlowMotion()
+
+val run = [ level=6, loop=0, gold=3, units=[
+    ["vagrant", 3], ["archer", 3], ["wizard", 3], ["swordsman", 3], ["cleric", 3],
+] ]
+val A = new_arena(6)
+set A.run = run
+spawn Arena(A, [
+    [120, 80, 6, "speed_booster"], [360, 80, 6, "exploder"], [120, 200, 6, "shooter"],
+    [360, 200, 6, "headbutter"], [240, 70, 6, nil, "speed_booster"], [200, 100, 6], [280, 100, 6],
+])
+val e = await :goto
+print(eng.tick(), e.screen)
+await 1s        ;; (doc/compiler.md, 5)
