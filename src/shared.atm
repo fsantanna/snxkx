@@ -91,7 +91,8 @@ task Stars () {
 ;; or `e.lines`). Then it emits :covered, so that the screen below
 ;; changes, and the circle shrinks from the center. With `e.counting`
 ;; (an arena), the text counts the gold of the level up, line by line,
-;; as `Arena:transition`.
+;; as `Arena:transition`. In real time, as the group `transitions` of
+;; the original: the game may be slowed down or stopped below it.
 task Transition (e) {
     val st = [ x=e.x, y=e.y, rs=0, ts=0 ]
     val t = text(e.lines || [ [text=e.text, font=pixul_font, alignment=:center] ])
@@ -101,17 +102,17 @@ task Transition (e) {
             text_draw(t, W/2, H/2, 0, st.ts, st.ts)
         }
     }
-    await 250ms
+    await WaitReal(0.25)
     spawn {
-        await 100ms
-        await Tween(0.1, st, [ts=1], cubic_in_out)
+        await WaitReal(0.1)
+        await TweenReal(0.1, st, [ts=1], cubic_in_out)
     }
-    await Tween(0.6, st, [rs=1.2*W], linear)
+    await TweenReal(0.6, st, [rs=1.2*W], linear)
     emit @:global :covered
     if e.counting {
         spawn {
             loop k in 3 {
-                await((if k == 0 => 0.1 => 0.2) * 1s)
+                await WaitReal(if k == 0 => 0.1 => 0.2)
                 set t.lines = gold_lines(e.counting, k)
                 loop _, l in t.lines {
                     set l.chars = text_parse(l.text)
@@ -122,12 +123,12 @@ task Transition (e) {
             }
         }
     }
-    await 300ms
+    await WaitReal(0.3)
     set st.x = W/2
     set st.y = H/2
     spawn {
-        await 600ms
-        await Tween(0.05, st, [ts=0], cubic_in_out)
+        await WaitReal(0.6)
+        await TweenReal(0.05, st, [ts=0], cubic_in_out)
     }
-    await Tween(0.6, st, [rs=0], linear)
+    await TweenReal(0.6, st, [rs=0], linear)
 }
