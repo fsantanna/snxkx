@@ -1,0 +1,81 @@
+0	go	mainmenu
+113	go	buy_screen
+573	go	arena
+812	wave	1
+842	add	SpawnMarker 80.0 135.0
+922	add	Seeker 68.0 123.0
+928	add	Seeker 92.0 123.0
+934	add	Seeker 92.0 147.0
+940	add	Seeker 68.0 147.0
+946	add	Seeker 80.0 135.0
+952	add	Seeker 68.0 123.0
+958	add	Seeker 92.0 123.0
+964	add	Seeker 92.0 147.0
+998	unit.hit	swordsman 136.6
+1003	unit.hit	swordsman 133.1
+1019	unit.hit	swordsman 129.7
+1026	unit.hit	swordsman 126.3
+1032	unit.hit	swordsman 122.9
+1067	enemy.die	seeker
+1067	unit.hit	swordsman 119.4
+1090	unit.hit	swordsman 116.0
+1113	enemy.die	seeker
+1113	unit.hit	swordsman 112.6
+1295	enemy.die	seeker
+1295	unit.hit	swordsman 109.1
+1519	enemy.die	seeker
+1519	unit.hit	swordsman 105.7
+1538	enemy.die	seeker
+1538	unit.hit	swordsman 102.3
+1540	enemy.die	seeker
+1540	unit.hit	swordsman 98.9
+1854	unit.hit	swordsman 95.4
+2202	unit.hit	swordsman 92.0
+2542	enemy.die	seeker
+2542	unit.hit	swordsman 88.6
+2848	enemy.die	seeker
+2848	wave	2
+2848	unit.hit	swordsman 85.1
+2878	add	SpawnMarker 400.0 135.0
+2958	add	Seeker 388.0 123.0
+2964	add	Seeker 412.0 123.0
+2970	add	Seeker 412.0 147.0
+2976	add	Seeker 388.0 147.0
+2982	add	Seeker 400.0 135.0
+2988	add	Seeker 388.0 123.0
+2994	add	Seeker 412.0 123.0
+3000	add	Seeker 412.0 147.0
+3006	add	Seeker 388.0 147.0
+3012	add	Seeker 400.0 135.0
+3259	unit.hit	swordsman 81.7
+3289	unit.hit	swordsman 78.3
+3309	unit.hit	swordsman 74.9
+3395	enemy.die	seeker
+3395	unit.hit	swordsman 71.4
+3488	unit.hit	swordsman 68.0
+3492	unit.hit	swordsman 64.6
+3497	unit.hit	swordsman 61.1
+3508	unit.hit	swordsman 57.7
+3526	unit.hit	swordsman 54.3
+3672	enemy.die	seeker
+3672	unit.hit	swordsman 50.9
+3869	enemy.die	seeker
+3869	unit.hit	swordsman 47.4
+3891	enemy.die	seeker
+3891	unit.hit	swordsman 44.0
+3896	enemy.die	seeker
+3896	unit.hit	swordsman 40.6
+3911	unit.hit	swordsman 37.1
+4199	enemy.die	seeker
+4199	unit.hit	swordsman 33.7
+4202	enemy.die	seeker
+4202	unit.hit	swordsman 30.3
+4217	unit.hit	swordsman 26.9
+4532	enemy.die	seeker
+4532	unit.hit	swordsman 23.4
+4561	enemy.die	seeker
+4561	unit.hit	swordsman 20.0
+4911	enemy.die	seeker
+4911	clear	1
+4911	unit.hit	swordsman 16.6
+5144	go	buy_screen

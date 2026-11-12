@@ -1,0 +1,4 @@
+;; A run from the start, by script, as `tst/original/run1.sh`: the menu,
+;; "arena run", the first card of the shop, GO, level 1 with no steering,
+;; until it is clear, and the shop of level 2.
+include "../../main.atm"
