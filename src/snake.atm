@@ -142,30 +142,6 @@ task Unit (A, u, fx) {
         }
     }
 
-    ;; the walls: the leader bounces, and the followers feel it in turn
-    spawn {
-        loop e on :collision.enter until (it.b == u.b) && (it.other.kind == :wall) {
-            if u.leader {
-                spawn HfxUse(u.hit, 0.5, 200, 10, 0.1)
-                spring_shake(2, math.pi - u.r)
-                bounce(u, e.nx, e.ny)
-                val p = rfloat(0.9, 1.1)
-                play(player_hit_wall1, [pitch=p, volume=0.1])
-                play(pop1, [pitch=p, volume=0.2])
-                loop i, f in A.units {
-                    if i > 0 {
-                        spawn {
-                            await((i*(10.6/u.v)) * 1s)
-                            spawn HfxUse(f.hit, 0.5, 200, 10, 0.1)
-                            play(player_hit_wall1, [pitch=p + 0.025*i, volume=0.1])
-                            play(pop1, [pitch=p + 0.05*i, volume=0.2])
-                        }
-                    }
-                }
-            }
-        }
-    }
-
     ;; the enemies: both push and hit
     spawn {
         loop e on :collision.enter until (it.b == u.b) && (it.other.kind == :enemy) {
@@ -197,19 +173,46 @@ task Unit (A, u, fx) {
             until u.hp <= 0
         }
     } with {
-        ;; the movement, in every tick of game time
-        var following = false
-        loop us on :clock {
-            val dt = us / 1000000
-            if u.leader {
+        ;; a follower, until the units ahead of it die
+        if A.units@0 != u {
+            par :any {
+                ;; first, until there is a place for it on the path
+                loop on :clock {
+                    set u.x, u.y = body_pos(u.b)
+                    set u.r = body_angle(u.b)
+                    until snake_place(A, u)
+                }
+                play(spawn1, [pitch=rfloat(0.8, 1.2), volume=0.15])
+                loop _ in rint(3, 4) {
+                    spawn @fx HitParticle(u.x, u.y, [color=u.color])
+                }
+                spawn @fx HitCircle(u.x, u.y, [rs=10, color=fg@0, scale_down=true,
+                                               duration=0.3, change_color=[0.5, u.color]])
+                ;; then along the path of the leader
+                loop on :clock {
+                    set u.x, u.y = body_pos(u.b)
+                    val p = snake_place(A, u)
+                    if p {
+                        body_set(u.b, :position, p.x, p.y)
+                        set u.r = p.r
+                    } else {
+                        set u.r = body_angle(u.b)
+                    }
+                }
+            } with {
+                await :Snake.lead until it.u == u
+            }
+        }
+        ;; the leader
+        par {
+            loop us on :clock {
+                val dt = us / 1000000
                 ;; the path, as `previous_positions` (every 0.01s: every tick)
-                set A.path = [ [x=u.x, y=u.y, r=u.r] ] ++ (A.path || [])
+                set A.path = [ [x=u.x, y=u.y, r=u.r] ] ++ A.path
                 if #A.path > 256 {
                     set A.path@(256) = nil
                 }
-            }
-            set u.x, u.y = body_pos(u.b)
-            if u.leader {
+                set u.x, u.y = body_pos(u.b)
                 if !A.menu {
                     if HELD.left > 0 {
                         set u.r -= 1.66*math.pi*dt
@@ -237,35 +240,25 @@ task Unit (A, u, fx) {
                     }
                 }
                 body_set(u.b, :angle, u.r)
-            } else {
-                ;; the place along the path of the leader
-                val leader = A.units@0
-                val target = 10.4*u.index
-                var sum = 0
-                var prev = leader
-                var p = nil
-                loop i, q in A.path || [] {
-                    set sum += math.sqrt((prev.x - q.x)*(prev.x - q.x) + (prev.y - q.y)*(prev.y - q.y))
-                    if sum >= target {
-                        set p = A.path@(i-1)
-                        break
-                    }
-                    set prev = q
-                }
-                if p {
-                    body_set(u.b, :position, p.x, p.y)
-                    set u.r = p.r
-                    if !following {
-                        set following = true
-                        play(spawn1, [pitch=rfloat(0.8, 1.2), volume=0.15])
-                        loop _ in rint(3, 4) {
-                            spawn @fx HitParticle(u.x, u.y, [color=u.color])
+            }
+        } with {
+            ;; the walls: it bounces, and the followers feel it in turn
+            loop e on :collision.enter until (it.b == u.b) && (it.other.kind == :wall) {
+                spawn HfxUse(u.hit, 0.5, 200, 10, 0.1)
+                spring_shake(2, math.pi - u.r)
+                bounce(u, e.nx, e.ny)
+                val p = rfloat(0.9, 1.1)
+                play(player_hit_wall1, [pitch=p, volume=0.1])
+                play(pop1, [pitch=p, volume=0.2])
+                loop i, f in A.units {
+                    if i > 0 {
+                        spawn {
+                            await((i*(10.6/u.v)) * 1s)
+                            spawn HfxUse(f.hit, 0.5, 200, 10, 0.1)
+                            play(player_hit_wall1, [pitch=p + 0.025*i, volume=0.1])
+                            play(pop1, [pitch=p + 0.05*i, volume=0.2])
                         }
-                        spawn @fx HitCircle(u.x, u.y, [rs=10, color=fg@0, scale_down=true,
-                                                       duration=0.3, change_color=[0.5, u.color]])
                     }
-                } else {
-                    set u.r = body_angle(u.b)
                 }
             }
         }
@@ -282,9 +275,29 @@ task Unit (A, u, fx) {
     snake_remove(A, u)
 }
 
-;; Removes a dead unit from the snake, as `recalculate_followers`: a new
-;; leader starts a new path, and the followers take their new places.
+;; The place of a follower on the path of the leader, 10.4 pixels per
+;; place behind it, or nil if the path is not that long yet.
+func snake_place (A, u) {
+    val target = 10.4*u.index
+    var sum = 0
+    var prev = A.units@0
+    var p = nil
+    loop i, q in A.path {
+        set sum += math.sqrt((prev.x - q.x)*(prev.x - q.x) + (prev.y - q.y)*(prev.y - q.y))
+        if sum >= target {
+            set p = A.path@(i-1)
+            break
+        }
+        set prev = q
+    }
+    p
+}
+
+;; Removes a dead unit from the snake, as `recalculate_followers`: the
+;; units behind it move up a place, and if it was the leader, the next
+;; one becomes the leader (`:Snake.lead`), with a new path.
 func snake_remove (A, u) {
+    val was_leader = A.units@0 == u
     val us = []
     loop _, o in A.units {
         if o != u {
@@ -292,14 +305,14 @@ func snake_remove (A, u) {
         }
     }
     set A.units = us
-    if u.leader && (#us > 0) {
-        set (us@0).leader = true
-        set A.path = []
-    }
     loop i, o in us {
         set o.index = i
     }
-    if #us == 0 {
-        emit @:global :Arena.died
+    ifs {
+        #us == 0 => emit @:global :Arena.died
+        was_leader => {
+            set A.path = []
+            emit @:global :Snake.lead [ u=us@0 ]
+        }
     }
 }

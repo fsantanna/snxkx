@@ -106,7 +106,7 @@ task Arena (A, units, enemies) {
     spawn Stars()
 
     loop i, c in units {
-        val u = [ character=c@0, level=c@1, index=i, leader=(i == 0) ]
+        val u = [ character=c@0, level=c@1, index=i ]
         if i == 0 {
             set u.x = A.start && A.start.x || (W/2)
             set u.y = A.start && A.start.y || (H/2 + 16)
