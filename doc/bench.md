@@ -15,8 +15,8 @@ other, with the same scripted input and the same seed
   OpenAL.
 - The original: LÖVE 11.5 with LuaJIT 2.1, in the bench mode of
   `tools/bench/bench.lua` (every loop is one tick of 1/60 s).
-- The port: at `f151195`, built with `-O2`, compiler `ceu-atmos` at
-  `995c3b2`.
+- The port: at `b2c2089` (the whole game, S9), built with `-O2`,
+  compiler `ceu-atmos` at `995c3b2`.
 - Each run is a process, measured by `wait4`: the time on the clock, the
   CPU time (user and system, of all of its threads, which includes the
   threads of llvmpipe), and the peak of its resident memory. The display
@@ -37,25 +37,33 @@ level 1 from tick 573, with no steering.
 
 | scenario | program | ticks | clock (s) | CPU (s) | ticks/s | peak (MB) |
 |----------|---------|------:|----------:|--------:|--------:|----------:|
-| menu     | port     |  600 |  3.87 | 10.56 | 155 | 128.1 |
-| menu     | original |  600 | 11.13 | 18.52 |  54 | 946.5 |
-| shop     | port     |  720 |  4.16 | 11.15 | 173 | 128.8 |
-| shop     | original |  720 | 11.41 | 19.54 |  63 | 946.2 |
-| level 1  | port     | 1800 | 10.60 | 29.42 | 170 | 128.7 |
-| level 1  | original | 1800 | 20.10 | 40.81 |  90 | 946.6 |
-| stress   | port     | 1500 | 19.06 | 36.21 |  79 | 132.9 |
-| stress   | original | 1500 | 24.27 | 42.28 |  62 | 946.0 |
+| menu     | port     |  600 |  3.72 | 10.24 | 161 | 130.6 |
+| menu     | original |  600 | 11.02 | 18.13 |  54 | 946.2 |
+| shop     | port     |  720 |  4.10 | 11.17 | 176 | 131.7 |
+| shop     | original |  720 | 11.18 | 18.72 |  64 | 946.1 |
+| level 1  | port     | 1800 | 10.46 | 29.13 | 172 | 131.6 |
+| level 1  | original | 1800 | 19.85 | 40.86 |  91 | 946.2 |
+| stress   | port     | 1500 | 13.26 | 29.58 | 113 | 140.8 |
+| stress   | original | 1500 | 23.85 | 42.37 |  63 | 946.9 |
 
-- Ticks per second: the port runs 2.9 times as many as the original in
-  the menu, 2.7 in the shop, 1.9 in level 1, and 1.3 in the stress.
-- CPU: the port spends 57% to 72% of the CPU time of the original in
-  the first three scenarios, and 86% in the stress.
-- Memory: the peak of the port is 128 to 133 MB, of the original 946 to
+- Ticks per second: the port runs 3.0 times as many as the original in
+  the menu, 2.8 in the shop, 1.9 in level 1, and 1.8 in the stress.
+- CPU: the port spends 56% to 71% of the CPU time of the original.
+- Memory: the peak of the port is 131 to 141 MB, of the original 946 to
   947 MB, in every scenario. Why the original needs that much was not
   investigated.
-- A first run, with the compiler at `2f45211`, gave the same picture
-  (167, 173, 177, and 74 ticks per second for the port; 53, 64, 87, and
-  59 for the original).
+
+### An earlier run, with a port that did not attack
+
+The first runs of this benchmark were at the end of S7 (port at
+`f151195`, compiler at `2f45211` and `995c3b2`): 155 to 177 ticks per
+second for the port in the first three scenarios (as above), but 74 to
+79 in the stress, against 59 to 62 for the original. At that time, the
+units of the port never attacked (a task spawned in a loop or an `if`
+ended at once, `compiler.md`, 7): the snake took no damage and killed no
+seeker, so the crowd of 200 lived to the end, while the snake of the
+original killed it. With attacks, 197 seekers die by tick 1500 of the
+stress in the port, and the logic has less to do.
 
 ## Where the time of the port goes
 
@@ -66,13 +74,17 @@ ticks each, median of three runs:
 
 | | logic (s) | draw (s) | render (s) |
 |-|----------:|---------:|-----------:|
-| level 1 | 0.21 | 0.32 | 7.78 |
-| stress  | 9.73 | 0.73 | 9.27 |
+| level 1 | 0.23 | 0.35 | 8.10 |
+| stress  | 3.90 | 0.56 | 8.57 |
 
 With few objects, the port spends almost all of its time in the
-rendering of llvmpipe: the logic of a tick takes about 0.14 ms. With the
-crowd, the logic costs as much as the rendering: about 10 ms per tick in
-the 927 ticks of the arena with more than 200 seekers.
+rendering of llvmpipe: the logic of a tick takes about 0.15 ms. With the
+crowd, the logic takes about 4 ms per tick in the 927 ticks of the arena,
+less as the crowd dies.
+
+The rest of this section was measured on the port of S7, whose units
+did not attack, so the 200 seekers lived through the whole stress: it
+shows what a crowd that stays costs (9.73 s of logic then).
 
 A profile of the stress with `callgrind` (700 ticks, the last 127 of them
 with the crowd) puts 52% of the instructions under `separate`
