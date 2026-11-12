@@ -1,0 +1,33 @@
+;; The keys of the original that are held, rather than pressed: turning
+;; left and right (`input:bind('move_left', {'a', 'left', 'm1'})` and
+;; `('move_right', {'d', 'e', 's', 'right', 'm2'})`). A count per action,
+;; of the keys and buttons held for it.
+
+val HELD = [ left=0, right=0 ]
+
+val KEY_ACTION = [ A=:left, Left=:left, D=:right, E=:right, S=:right, Right=:right ]
+val BUT_ACTION = [ @1=:left, @3=:right ]
+
+task Input () {
+    par {
+        loop e on :key.dn {
+            val a = KEY_ACTION@(e.name)
+            if a { set HELD@(a) += 1 }
+        }
+    } with {
+        loop e on :key.up {
+            val a = KEY_ACTION@(e.name)
+            if a { set HELD@(a) = math.max(0, HELD@(a) - 1) }
+        }
+    } with {
+        loop e on :mouse.dn {
+            val a = BUT_ACTION@(e.but)
+            if a { set HELD@(a) += 1 }
+        }
+    } with {
+        loop e on :mouse.up {
+            val a = BUT_ACTION@(e.but)
+            if a { set HELD@(a) = math.max(0, HELD@(a) - 1) }
+        }
+    }
+}
