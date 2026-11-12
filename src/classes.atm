@@ -1,0 +1,63 @@
+;; The classes of the units, as `get_number_of_units_per_class`,
+;; `get_class_levels`, `get_classes`, and `class_set_numbers` of the
+;; original (`main.lua:1089-1197`). A unit here is a record with
+;; `character` and `level` (or a pair [character, level]).
+
+;; The thresholds of each set: (first, second, third or nil).
+val CLASS_SETS = [
+    ranger=[3, 6], warrior=[3, 6], mage=[3, 6], nuker=[3, 6], rogue=[3, 6],
+    healer=[2, 4], conjurer=[2, 4], enchanter=[2, 4], psyker=[2, 4], curser=[2, 4],
+    forcer=[2, 4], swarmer=[2, 4], voider=[2, 4], mercenary=[2, 4],
+    sorcerer=[2, 4, 6], explorer=[1, 1],
+]
+
+func unit_character (u) {
+    if u.character => u.character => u@0
+}
+
+func unit_level (u) {
+    if u.character => u.level => u@1
+}
+
+;; The number of units of each class.
+func class_counts (units) {
+    val n = []
+    loop k, _ in CLASS_SETS {
+        set n@(k) = 0
+    }
+    loop _, u in units {
+        loop _, c in character_classes@(unit_character(u)) {
+            set n@(c) = (n@(c) || 0) + 1
+        }
+    }
+    n
+}
+
+;; The level of each class: how many of its thresholds the units reach.
+func class_levels (units) {
+    val n = class_counts(units)
+    val l = []
+    loop k, s in CLASS_SETS {
+        var lv = 0
+        loop _, t in s {
+            if n@(k) >= t {
+                set lv += 1
+            }
+        }
+        set l@(k) = if k == "explorer" => math.min(lv, 1) => lv
+    }
+    l
+}
+
+;; The classes of the units, each once, in the order they appear.
+func classes_of (units) {
+    val out = []
+    loop _, u in units {
+        loop _, c in character_classes@(unit_character(u)) {
+            if X.nin(c, out) {
+                set out@+ = c
+            }
+        }
+    }
+    out
+}

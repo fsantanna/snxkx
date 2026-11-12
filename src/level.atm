@@ -319,7 +319,7 @@ task Died (A, ui) {
     await WaitReal(2)
     spawn @ui Text2(40, 20, text([ [text="[wavy_mid, fg]your build", font=pixul_font, alignment=:center] ]))
     loop i, u in A.run.units {
-        val name = u@0
+        val name = unit_character(u)
         spawn @ui Text2(20 + 14 + text_width(pixul_font, name)/2, 40 + i*19,
                         text([ [text="[" ++ character_color_strings@(name) ++ "]" ++ name, font=pixul_font, alignment=:left] ]))
     }
