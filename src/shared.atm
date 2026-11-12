@@ -86,16 +86,18 @@ task Stars () {
 
 ;;; TRANSITION ;;;
 
-;; As `TransitionEffect`: a circle grows from (x,y) until it covers the
-;; screen, with a text that pops in the center. Then it emits :covered,
-;; so that the screen below changes, and the circle shrinks from the
-;; center. It draws on `:draw` where it lives.
-task Transition (x, y, color, txt) {
-    val st = [ x=x, y=y, rs=0, ts=0 ]
-    val t = text([ [text=txt, font=pixul_font, alignment=:center] ])
+;; As `TransitionEffect`: a circle grows from (e.x, e.y) until it covers
+;; the screen, with a text that pops in the center (`e.text`, a string,
+;; or `e.lines`). Then it emits :covered, so that the screen below
+;; changes, and the circle shrinks from the center. With `e.counting`
+;; (an arena), the text counts the gold of the level up, line by line,
+;; as `Arena:transition`.
+task Transition (e) {
+    val st = [ x=e.x, y=e.y, rs=0, ts=0 ]
+    val t = text(e.lines || [ [text=e.text, font=pixul_font, alignment=:center] ])
     spawn {
         loop on :draw {
-            eng.circle(st.x, st.y, st.rs, color)
+            eng.circle(st.x, st.y, st.rs, e.color)
             text_draw(t, W/2, H/2, 0, st.ts, st.ts)
         }
     }
@@ -106,6 +108,20 @@ task Transition (x, y, color, txt) {
     }
     await Tween(0.6, st, [rs=1.2*W], linear)
     emit @:global :covered
+    if e.counting {
+        spawn {
+            loop k in 3 {
+                await((if k == 0 => 0.1 => 0.2) * 1s)
+                set t.lines = gold_lines(e.counting, k)
+                loop _, l in t.lines {
+                    set l.chars = text_parse(l.text)
+                    set l.raw = vector.join(loop_chars(l.chars))
+                }
+                text_layout(t)
+                play(rtable([coins1, coins2, coins3]), [pitch=rfloat(0.95, 1.05), volume=0.5])
+            }
+        }
+    }
     await 300ms
     set st.x = W/2
     set st.y = H/2

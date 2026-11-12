@@ -3,12 +3,36 @@
 
 include "src/game.atm"
 
-;; A screen that is not ported yet: its name in the middle.
-task Todo (name) {
-    val t = text([ [text="[fg]" ++ name, font=pixul_font, alignment=:center] ])
-    loop on :draw {
-        text_draw(t, W/2, H/2)
+;; A new run, as the button "arena run" of the original makes one.
+func new_run () {
+    [ level=1, loop=0, gold=3, units=[], passives=[], shop_level=1, shop_xp=0 ]
+}
+
+;; The shop, until it is ported: the level and the gold, and a click
+;; starts the level with a default snake.
+task Shop0 (run) {
+    if #run.units == 0 {
+        set run.units = [["vagrant", 1], ["swordsman", 1], ["archer", 1]]
     }
+    val t = text([
+        [text="[fg]shop - level " ++ tostring(run.level) ++ ", gold " ++ tostring(run.gold), font=pixul_font, alignment=:center],
+        [text="[bg10](click to start)", font=pixul_font, alignment=:center],
+    ])
+    spawn {
+        loop on :draw {
+            text_draw(t, W/2, H/2)
+        }
+    }
+    await :mouse.dn
+    emit @:global :goto [ screen=:arena, x=W/2, y=H/2, color=fg@0, text="[wavy, bg]level " ++ tostring(run.level) ]
+    await(false)
+}
+
+;; The arena of the level of the run.
+task Play (run) {
+    val A = new_arena(run.level)
+    set A.run = run
+    await Arena(A)
 }
 
 spawn Background()
@@ -19,6 +43,7 @@ spawn SlowMotion()
 par {
     ;; the screens: each one runs until it asks for the next one, and the
     ;; transition covers it
+    var run = new_run()
     var screen = [ Menu, nil, "mainmenu" ]
     loop {
         val next = do {
@@ -31,14 +56,25 @@ par {
             await :covered
             e
         }
+        eng.slow(1)
         set screen = match next.screen {
-            :buy_screen => [ Todo, "shop", "buy_screen" ]
+            :buy_screen => do {
+                if next.counting {
+                    set run.level += 1
+                }
+                [ Shop0, run, "buy_screen" ]
+            }
+            :arena => [ Play, run, "arena" ]
+            :restart => do {
+                set run = new_run()
+                [ Shop0, run, "buy_screen" ]
+            }
             else => [ Menu, nil, "mainmenu" ]
         }
     }
 } with {
     ;; the transitions, over the screens
     loop e on :goto {
-        await Transition(e.x, e.y, e.color, e.text)
+        await Transition(e)
     }
 }
