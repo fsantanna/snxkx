@@ -1,5 +1,5 @@
 ;; Text with tags, as `Text` of the original (`engine/graphics/text.lua`)
-;; with the tags of `global_text_tags` (`shared.lua`).
+;; with the tags of `global_text_tags` (`shared.lua`). Needs `anim.atm`.
 ;;
 ;; A text is a vector of lines, each one a table with `text`, `font`, and
 ;; optionally `alignment` (:left, :center, :right), `height_multiplier`,
@@ -9,8 +9,9 @@
 ;;      "[wavy_mid, fg]shop [fg]- gold: [yellow]3"
 ;;
 ;; A tag is a color of the palette or a wave. A character may also have
-;; its own `color`, over its tags: the tags with timers of the original
-;; (`cbyc`) are tasks that set it (see `Cbyc`).
+;; its own `color`, over its tags, and its own offset `oy`: the tags with
+;; timers of the original (`cbyc`, `nudge_down`) are tasks that set them
+;; (see `Cbyc`, `NudgeDown`).
 
 ;; The colors of the tags, by name.
 val TAG_COLORS = [
@@ -142,8 +143,35 @@ func text_draw (t, x, y, r, sx, sy) {
             }
             eng.push(x, y, r, sx, sy)
             print_at(line.font, c.c, x + c.x - t.w/2, y + c.y - t.h/2, 0,
-                     line.sx || 1, line.sy || line.sx || 1, 0, oy, color)
+                     line.sx || 1, line.sy || line.sx || 1, 0, oy + (c.oy || 0), color)
             eng.pop()
         }
+    }
+}
+
+;; As the tag `nudge_down` of the original: its characters start 4 pixels
+;; up and come down in 0.1s.
+task NudgeDown (t) {
+    val cs = []
+    loop _, line in t.lines {
+        loop _, c in line.chars {
+            if X.xin("nudge_down", c.tags) {
+                set cs@+ = c
+            }
+        }
+    }
+    val st = [ oy=-4 ]
+    par :any {
+        await Tween(0.1, st, [oy=0], linear)
+    } with {
+        loop {
+            loop _, c in cs {
+                set c.oy = st.oy
+            }
+            await :clock
+        }
+    }
+    loop _, c in cs {
+        set c.oy = 0
     }
 }

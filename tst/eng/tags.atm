@@ -2,6 +2,7 @@
 
 include "../../eng/eng.atm"
 include "../../eng/color.atm"
+include "../../eng/anim.atm"
 include "../../eng/text.atm"
 
 val main = eng.canvas(true, true)
