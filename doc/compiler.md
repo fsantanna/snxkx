@@ -35,3 +35,34 @@ duration.
 What would help: time emitted to a task or a pool, which advances the
 timers of that subtree only, e.g. `emit @ts (us)` for a pool that is
 toggled off for the global time.
+
+## 2. A table cannot keep the tasks of a pool
+
+Seen at `2f45211`.
+
+The physics reports contacts between bodies, and the port wants to send
+each contact to the two tasks of the bodies, as the original calls
+`on_collision_enter` on the two objects. For that, the world needs a
+table from body to task. But a task spawned in a pool cannot be stored
+in any table outside of itself, even one pinned in the block of the
+pool, before or after it:
+
+```
+task T () { await(false) }
+do {
+    pin ts = tasks()
+    pin w = [ ts=[] ]
+    val t = spawn @ts T()
+    set w.ts@0 = t          ;; ==> invalid escape : pinned value
+}
+```
+
+What the port does: the task that steps the world emits each contact
+to itself and its subtree, with the body that it is for, and the task
+of each body awaits only its own (`until it.b == b`). A contact costs
+an emit through the whole arena, matched by every task that awaits a
+contact, instead of two emits.
+
+What would help: a table pinned in the block of a pool, or a weak
+reference to a task, that may keep the tasks of the pool and loses them
+when they end.
