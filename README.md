@@ -24,7 +24,16 @@ tst/run.sh          # the tests, with no screen
 
 ## Status
 
-Work in progress. See `doc/` and the plan of the port.
+Work in progress: the menu, the shop, the levels with their waves,
+elites and bosses, and ten of the characters; not yet the passives, the
+items, the other characters and enemies, the options, or the save.
+
+- `doc/study.md`: the original and the port, side by side, behavior by
+  behavior.
+- `doc/state.md`: the flags and timestamps of the original, and what
+  became of each one.
+- `doc/bench.md`: the port against the original (`tools/bench/perf.py`).
+- `doc/compiler.md`: findings about the compiler.
 
 ## Sources
 
