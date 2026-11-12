@@ -464,7 +464,6 @@ func shop_sell (run, i, copy) {
 
 ;; The shop. It emits `:goto` to the arena on GO.
 task Shop (run) {
-    val me = task
     pin fx = tasks()
 
     ;; the texts
@@ -580,25 +579,25 @@ task Shop (run) {
             buy && run.cards@(buy) => {
                 val c = run.cards@(buy)
                 val ok = shop_buy(run, c)
-                emit @me :Shop.party
+                emit @:task :Shop.party
                 if ok {
                     play(ui_switch1, [pitch=rfloat(0.95, 1.05), volume=0.5])
                     coins()
-                    emit @me :Shop.bought [ i=buy ]
+                    emit @:task :Shop.bought [ i=buy ]
                     spawn @fx CardGone(cards_at@(buy), 75, c, run.units, fx)
                     set run.cards@(buy) = false
                     set_party_text()
-                    emit @me :Shop.gold
+                    emit @:task :Shop.gold
                 } else {
                     play(error1, [pitch=rfloat(0.95, 1.05), volume=0.5])
-                    emit @me :Shop.denied [ i=buy ]
+                    emit @:task :Shop.denied [ i=buy ]
                 }
             }
             e ?? :Shop.sell => {
                 coins()
                 shop_sell(run, e.i, e.copy)
-                emit @me :Shop.gold
-                emit @me :Shop.party
+                emit @:task :Shop.gold
+                emit @:task :Shop.party
                 set_party_text()
             }
             (id == :reroll) && (but == 1) => {
@@ -607,9 +606,9 @@ task Shop (run) {
                 } else {
                     switch(e.spring)
                     set run.cards = roll_cards(run)
-                    emit @me :Shop.reroll
+                    emit @:task :Shop.reroll
                     set run.gold -= 2
-                    emit @me :Shop.gold
+                    emit @:task :Shop.gold
                 }
             }
             (id == :lock) && (but == 1) => {
@@ -627,7 +626,7 @@ task Shop (run) {
                         set run.shop_level += 1
                     }
                     set run.gold -= 5
-                    emit @me :Shop.gold
+                    emit @:task :Shop.gold
                 }
             }
             (id == :level) && (but == 3) && (run.shop_level > 1) => {
@@ -638,7 +637,7 @@ task Shop (run) {
                     set run.shop_xp = 0
                     set run.shop_level -= 1
                     set run.gold -= 10
-                    emit @me :Shop.gold
+                    emit @:task :Shop.gold
                 }
             }
             id == :restart => {
