@@ -1,0 +1,69 @@
+;; Box2D through the engine: two balls that collide, a projectile that
+;; passes through an enemy and triggers its sensor, and a wall.
+
+include "../../eng/eng.atm"
+include "../../eng/phys.atm"
+
+pin w = phys_world(32, [:player, :enemy, :projectile])
+phys_disable(w, :projectile, :enemy)
+phys_trigger(w, :projectile, :enemy)
+
+val f = \(v) { string.format("%.1f", v) }
+
+task Ball (name, x, y, vx, tag, rest) {
+    set pub = [ name=name ]
+    val b = body(w, pub, :dynamic, x, y, tag, [:circle, 4])
+    if rest {
+        body_restitution(b, rest)
+    }
+    defer {
+        body_free(w, b)
+    }
+    body_set(b, :velocity, vx, 0)
+    set pub.report = func () {
+        val px, py = body_pos(b)
+        val vx2, vy2 = body_vel(b)
+        print(name, f(px), f(py), f(vx2), f(vy2))
+    }
+    par {
+        loop e on :collision.enter until it.b == b {
+            print(eng.tick(), name, "collision with", e.other.name)
+        }
+    } with {
+        loop e on :trigger.enter until it.b == b {
+            print(eng.tick(), name, "trigger with", e.other.name)
+        }
+    } with {
+        loop e on :trigger.exit until it.b == b {
+            print(eng.tick(), name, "trigger exit", e.other.name)
+        }
+    }
+}
+
+task Wall (x, y, w2, h2) {
+    set pub = [ name=:wall ]
+    val b = body(w, pub, :static, x, y, :solid, [:polygon, [-w2,-h2, w2,-h2, w2,h2, -w2,h2]])
+    defer {
+        body_free(w, b)
+    }
+    await(false)
+}
+
+pin ts = tasks()
+spawn @ts Wall(300, 100, 5, 40)
+val a = spawn @ts Ball(:a, 100, 100, 60, :player)
+val b = spawn @ts Ball(:b, 200, 100, -60, :player)
+val p = spawn @ts Ball(:p, 100, 150, 120, :projectile)
+val e = spawn @ts Ball(:e, 200, 152, 0, :enemy)
+val c = spawn @ts Ball(:c, 250, 80, 100, :player, 0.5)
+print("mass", f(body_mass(a.pub.b)*1000), f(body_mass(p.pub.b)*1000))
+
+loop us on :clock {
+    phys_step(w, us/1000000)
+    until eng.tick() == 180
+}
+a.pub.report()
+b.pub.report()
+p.pub.report()
+e.pub.report()
+c.pub.report()

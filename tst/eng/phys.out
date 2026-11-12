@@ -1,0 +1,11 @@
+mass	49.1	98.2
+26	c	collision with	wall
+47	a	collision with	b
+47	b	collision with	a
+47	p	trigger with	e
+54	p	trigger exit	e
+a	146.0	100.0	0.0	0.0
+b	154.0	100.0	0.0	0.0
+p	460.0	150.0	120.0	0.0
+e	200.0	152.0	0.0	0.0
+c	163.2	80.0	-50.0	0.0

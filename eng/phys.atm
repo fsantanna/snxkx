@@ -1,0 +1,164 @@
+;; The physics of the port, over `eng/phys.h` (Box2D v3), as the physics
+;; world of a group of the original (`Group:set_as_physics_world` and the
+;; mixin `Physics`).
+;;
+;; A world has tags of collision. Each body has a tag. After each step,
+;; `phys_step` emits, to the task that calls it and the tasks inside it:
+;;
+;;      :collision.enter [b, other]   two bodies touch (once for each)
+;;      :collision.exit  [b, other]   they stop touching
+;;      :trigger.enter   [b, other]   the sensor of b overlaps other
+;;      :trigger.exit    [b, other]   the overlap ends
+;;
+;; where `b` is the body that receives the event, and `other` is the
+;; public record of the other body (see `body`). The task of a body
+;; awaits its own events with `until it.b == b`. (A table cannot keep the
+;; tasks of a pool, so the events cannot go to the two tasks alone: see
+;; `doc/compiler.md`, 2.)
+
+```:prelude
+#include "eng/phys.h"
+```
+
+;; A world, as `set_as_physics_world(meter, 0, 0, tags)`: the tags get a
+;; category each, plus the tag :solid, as the original.
+func phys_world (meter, tags) {
+    `pw_world(eg_dbl($meter));`
+    val w = :World [ tags=[], objs=[] ]
+    var i = 0
+    loop _, t in tags ++ [:solid] {
+        if !w.tags@(t) {
+            set w.tags@(t) = [ cat=(1 << i), masks=0, triggers=false ]
+            set i += 1
+        }
+    }
+    w
+}
+
+func phys_world_free () {
+    `pw_world_free();`
+}
+
+;; As `disable_collision_between(t1, t2)`: bodies of t1 do not collide
+;; with bodies of t2 (and so neither the other way, as in Box2D).
+func phys_disable (w, t1, t2) {
+    set w.tags@(t1).masks = w.tags@(t1).masks | w.tags@(t2).cat
+}
+
+;; As `enable_trigger_between(t1, t2)`: bodies of t1 get a sensor.
+func phys_trigger (w, t1, t2) {
+    set w.tags@(t1).triggers = true
+}
+
+;; A body at (x,y), as `set_as_circle`,
+;; `set_as_rectangle`, or `set_as_polygon`: `shape` is [:circle, r],
+;; [:rect, w, h], or [:polygon, [x1,y1,...]] (points relative to x,y).
+;; `type` is :static, :kinematic, or :dynamic. `pub` is the public
+;; record of the body, which other bodies receive in their events; its
+;; field `b` is set to the body.
+func body (w, pub, type, x, y, tag, shape) {
+    val t = w.tags@(tag)
+    val k = match type { :static => 0 ; :kinematic => 1 ; else => 2 }
+    val b = `:number pw_body(eg_int($k), eg_dbl($x), eg_dbl($y))`
+    val cat  = t.cat
+    val mask = ~t.masks
+    val sen  = t.triggers
+    match shape@0 {
+        :circle => do {
+            val r = shape@1
+            `pw_circle(eg_int($b), eg_dbl($r), (uint64_t)a_dbl($cat), (uint64_t)(int64_t)a_dbl($mask), a_truthy($sen));`
+        }
+        :rect => do {
+            val bw = shape@1
+            val bh = shape@2
+            `pw_rect(eg_int($b), eg_dbl($bw), eg_dbl($bh), (uint64_t)a_dbl($cat), (uint64_t)(int64_t)a_dbl($mask), a_truthy($sen));`
+        }
+        :polygon => do {
+            val pts = shape@1
+            ```
+            {
+                double xs[8], ys[8];
+                int n = 0;
+                AVal t = $pts;
+                for (int i=0; n<8; i+=2) {
+                    AVal vx = a_tab_get(A_TAB_OF(t), a_int(i));
+                    AVal vy = a_tab_get(A_TAB_OF(t), a_int(i+1));
+                    if (!a_isnum(vx) || !a_isnum(vy)) break;
+                    xs[n] = a_dbl(vx); ys[n] = a_dbl(vy); n++;
+                }
+                pw_polygon(eg_int($b), n, xs, ys, (uint64_t)a_dbl($cat), (uint64_t)(int64_t)a_dbl($mask), a_truthy($sen));
+            }
+            ```
+        }
+    }
+    set pub.b = b
+    set pub.tag = tag
+    set w.objs@(b) = pub
+    b
+}
+
+;; Destroys a body, as `destroy` of the mixin.
+func body_free (w, b) {
+    set w.objs@(b) = nil
+    `pw_body_free(eg_int($b));`
+}
+
+;; The state of a body.
+func body_pos (b) {
+    return `:number.float pw_get(eg_int($b), 0)`, `:number.float pw_get(eg_int($b), 1)`
+}
+func body_vel (b) {
+    return `:number.float pw_get(eg_int($b), 2)`, `:number.float pw_get(eg_int($b), 3)`
+}
+func body_angle (b) {
+    `:number.float pw_get(eg_int($b), 4)`
+}
+func body_mass (b) {
+    `:number.float pw_get(eg_int($b), 6)`
+}
+
+func body_set (b, what, x, y) {
+    val k = match what {
+        :position => 0 ; :velocity => 1 ; :angle => 2 ; :angular_velocity => 3
+        :damping => 4 ; :angular_damping => 5 ; :fixed_rotation => 6 ; :bullet => 7
+        :force => 8 ; :impulse => 9 ; :angular_impulse => 10 ; :torque => 11
+    }
+    val v = if x == true => 1 => (if x == false => 0 => x)
+    `pw_set(eg_int($b), eg_int($k), eg_dbl($v), eg_dbl($y));`
+}
+
+func body_restitution (b, v) {
+    `pw_shapes(eg_int($b), 0, eg_dbl($v));`
+}
+func body_friction (b, v) {
+    `pw_shapes(eg_int($b), 1, eg_dbl($v));`
+}
+
+;; A step of the world, as `World:update(dt)`, and the delivery of its
+;; events to the tasks of the bodies.
+func phys_step (w, dt) {
+    `pw_step(eg_dbl($dt));`
+    val names = [:collision.enter, :collision.exit, :trigger.enter, :trigger.exit]
+    loop k in 4 {
+        val n = `:number PW_EV_N[eg_int($k)]`
+        loop i in n {
+            val a = `:number PW_EV_A[eg_int($k)][eg_int($i)]`
+            val b = `:number PW_EV_B[eg_int($k)][eg_int($i)]`
+            val ob = w.objs@(b)
+            if w.objs@(a) && ob {
+                emit tagged(names@(k), [b=a, other=ob])
+            }
+            ;; contacts go to both bodies, sensors only to the sensor
+            val oa = w.objs@(a)
+            if (k < 2) && w.objs@(b) && oa {
+                emit tagged(names@(k), [b=b, other=oa])
+            }
+        }
+    }
+}
+
+;; A table with a tag.
+func tagged (t, tab) {
+    set tab.tag = t
+    tab
+}
