@@ -1,6 +1,6 @@
 ;; The main menu, as `MainMenu` of the original (`mainmenu.lua`): an
-;; arena with walls and stars around it, dimmed, under the title and the
-;; buttons. (The snake that runs in the arena comes with the physics.)
+;; arena with a snake that runs by itself, dimmed, under the title and
+;; the buttons.
 ;;
 ;; It returns :quit, or emits `:goto [screen, ...]` when the run starts
 ;; and lives on until the transition covers it.
@@ -18,27 +18,21 @@ func rect_vertices (x1, y1, x2, y2) {
 val modal_transparent = rgba(0.1, 0.1, 0.1, 0.6)
 
 task Menu () {
-    val walls = [
-        rect_vertices(-40, -40, MENU_X1, H + 40),
-        rect_vertices(MENU_X2, -40, W + 40, H + 40),
-        rect_vertices(MENU_X1, -40, MENU_X2, MENU_Y1),
-        rect_vertices(MENU_X1, MENU_Y2, MENU_X2, H + 40),
-    ]
     val title = text([ [text="[wavy_mid, fg]SNKRX", font=fat_font, alignment=:center] ])
 
-    spawn Stars()
+    ;; the arena, with a snake that runs by itself, as the original's
+    val A = new_arena(1, true)
+    set A.start = [
+        x = W/2 + rfloat(-48, 48),
+        y = H/2 + 16 + rfloat(-48, 48),
+        r = rtable([-math.pi/4, math.pi/4, 3*math.pi/4, -3*math.pi/4]),
+    ]
+    spawn Arena(A, [["psykino", 1], ["magician", 1], ["bane", 1], ["scout", 1],
+                    ["cannoneer", 1], ["swordsman", 1], ["archer", 1]])
 
-    ;; the arena: walls, then the stars outside of it, then everything
-    ;; dimmed under the interface
+    ;; everything dimmed under the interface
     spawn {
         loop on :draw {
-            loop _, v in walls {
-                eng.polygon(v, bg@(-1))         ;; Wall
-            }
-            loop _, v in walls {
-                eng.polygon(v, bg@(-1))         ;; WallCover
-            }
-            eng.canvas_draw_outside(STARS, MENU_X1, MENU_Y1, MENU_X2, MENU_Y2, white@0)
             eng.rect(W/2, H/2, 2*W, 2*H, nil, nil, modal_transparent)
         }
     }

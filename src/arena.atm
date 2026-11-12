@@ -108,8 +108,9 @@ task Arena (A, units, enemies) {
     loop i, c in units {
         val u = [ character=c@0, level=c@1, index=i, leader=(i == 0) ]
         if i == 0 {
-            set u.x = W/2
-            set u.y = H/2 + 16
+            set u.x = A.start && A.start.x || (W/2)
+            set u.y = A.start && A.start.y || (H/2 + 16)
+            set u.r = A.start && A.start.r || 0
         }
         set A.units@+ = u
         spawn @main Unit(A, u, effects)

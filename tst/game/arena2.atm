@@ -1,0 +1,16 @@
+;; The arena with one unit turning left (key A held) among many seekers,
+;; until it dies, and the arena returns.
+include "../../src/game.atm"
+
+spawn Background()
+spawn Camera()
+spawn Input()
+spawn SlowMotion()
+
+val A = new_arena(1)
+val es = []
+loop i in 12 {
+    set es@+ = [100 + 25*i, 80 + 10*(i%5), 5]
+}
+val r = await Arena(A, [["vagrant", 1]], es)
+print(eng.tick(), r, #A.enemies)
