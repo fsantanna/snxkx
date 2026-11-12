@@ -523,7 +523,7 @@ behind it move up, and if it was the leader, the next unit leads.
 
 A unit carries its role and its links in fields: `leader`, `followers`,
 `parent`, `follower_index`, and `dead`. Its update branches on the role
-in every tick (`player.lua:1352-1426`), and a dead unit repairs the
+in every tick (`player.lua:1351-1426`), and a dead unit repairs the
 links of the others (`player.lua:1754-1781`):
 
 ```lua
