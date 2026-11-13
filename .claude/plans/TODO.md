@@ -12,7 +12,9 @@ possible.
    (`CREDITS.md`, `README.md`, `run.sh`, `tools/setup.sh`,
    `build/one.sh`, `tst/run.sh`, `doc/compiler.md`, `doc/bench.md`,
    `doc/study.md`, `261111-snkrx.md`, `build/cg.out`). This repository
-   may itself become `ia-atmos/sdl-snkrx`. Recommended: wait for the
+   moved too: a push to `fsantanna/snxkx` answers that it is now
+   `ia-atmos/snxkx` (the old address still works), and it may become
+   `ia-atmos/sdl-snkrx`. Recommended: wait for the
    renames of the organization, then update all names in one commit,
    keeping the folder `ext/ceu-atmos` (fewer changes; the folder name
    is local).
