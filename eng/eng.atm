@@ -13,6 +13,7 @@
 ;;      (time)                  the game time, which `await 1s` and `:clock`
 ;;                              follow: the real time scaled by `eng.slow`
 ;;      :draw                   to draw the frame
+;;      :overlay                to draw over the frame (after all of :draw)
 ;;
 ;; The game is 480x270 pixels, scaled to the window. Shapes are drawn in
 ;; the current canvas, in the current transform, as `graphics` of the

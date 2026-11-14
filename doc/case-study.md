@@ -21,8 +21,10 @@ level, gold, the win at level 25 and the loops, new game plus, the
 options with the game paused, the music, and the save of the state and
 of the run.
 
-Left out: the texts that explain an object under the mouse
-(`InfoText`), the tutorial, the credits, dragging a unit in the party,
+The texts that explain an object under the mouse (`InfoText`) and the
+messages of the shop came later, with the build at the end of a level.
+
+Left out: the tutorial, the credits, dragging a unit in the party,
 the achievements and Steam, the buttons that open pages on the web, and
 the options for mouse control, the run timer, the size of the window,
 and the cooldowns and arrow drawn on the snake.
@@ -53,19 +55,20 @@ Six patterns cover the timers of the original:
 
 ## The flags
 
-`state.md` lists 63 variables of the original that guard a phase or
-compute a time (counting the nine flags of the steering as one, and the
-`selected` of the four buttons of the shop as one). In the port, 31 of
-them are gone: the phase they guarded is a place in the code of a task.
-The other 32 became 32 variables, and none guards a phase of the task
-that sets it: 17 are fields that other tasks read (a curse, a slow, a
-stun), 6 count running tasks or events, 5 are locals of a task, and 4
-are fields of the run or of the HUD.
+`state.md` lists 66 variables of the original that guard a phase or
+compute a time (counting the nine flags of the steering as one, the
+`selected` of the four buttons of the shop as one, and the `info_text`
+of the objects under the mouse, and of the messages, as one each). In
+the port, 33 of them are gone: the phase they guarded is a place in the
+code of a task. The other 33 became 33 variables, and none guards a
+phase of the task that sets it: 17 are fields that other tasks read (a
+curse, a slow, a stun), 6 count running tasks or events, 6 are locals
+of a task, and 4 are fields of the run or of the HUD.
 
 So the flags that remain are state that one task shows to another. The
 flags that a task kept for itself (`dead`, `being_pushed`,
 `transitioning`, `quitting`, `choosing_passives`, `selected`,
-`cant_be_picked_up`) are gone.
+`cant_be_picked_up`, `info_text`) are gone.
 
 ## What the port taught about Atmos
 

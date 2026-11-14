@@ -351,12 +351,7 @@ task Won (A, ui) {
     spawn @ui Text2(W/2 + 40, H/2 - 69, t)
     spawn @ui Cbyc(t, :cbyc2)
     await WaitReal(2.5)
-    spawn @ui Text2(40, 20, text([ [text="[wavy_mid, fg]your build", font=pixul_font, alignment=:center] ]))
-    loop i, u in A.run.units {
-        val c = unit_character(u)
-        spawn @ui Text2(20 + 14 + text_width(pixul_font, c)/2, 40 + i*19,
-                        text([ [text="[" ++ character_color_strings@(c) ++ "]" ++ c, font=pixul_font, alignment=:left] ]))
-    }
+    spawn @ui Build(A.run, 20)
     val last = STATE.ng == 6
     if last {
         ;; the fifth new game plus is the last one
@@ -415,12 +410,7 @@ task Died (A, ui) {
     spawn SlowDown(2)
     spawn @ui TweenReal(2, CAM, [x=W/2, y=H/2, r=0], linear)
     await WaitReal(2)
-    spawn @ui Text2(40, 20, text([ [text="[wavy_mid, fg]your build", font=pixul_font, alignment=:center] ]))
-    loop i, u in A.run.units {
-        val name = unit_character(u)
-        spawn @ui Text2(20 + 14 + text_width(pixul_font, name)/2, 40 + i*19,
-                        text([ [text="[" ++ character_color_strings@(name) ++ "]" ++ name, font=pixul_font, alignment=:left] ]))
-    }
+    spawn @ui Build(A.run, 30)
     spawn @ui Text2(W/2, H/2,
         text([ [text="[wavy_mid, fg]level reached: [wavy_mid, yellow]" ++ tostring(A.level), font=fat_font, alignment=:center] ]), 0.7, 0.7)
     spawn @ui Button(task, :restart, W/2, H/2 + 24, "restart run (r)")

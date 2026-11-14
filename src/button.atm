@@ -4,7 +4,8 @@
 ;;
 ;; A click is not an action of the button: the button emits
 ;; `:Button.click [id, spring]` to the task `owner`, which decides what
-;; follows. The button lives until its owner aborts it.
+;; follows. The button lives until its owner aborts it. With `opts.info`,
+;; a text shows under it while the mouse is over it.
 
 task Button (owner, id, x, y, label, opts) {
     val fg_color = opts && opts.fg_color || :bg10
@@ -49,6 +50,14 @@ task Button (owner, id, x, y, label, opts) {
         } with {
             loop on :mouse.dn until it.but == 1 {
                 emit @owner :Button.click [ id=id, spring=s ]
+            }
+        } with {
+            ;; its text under the mouse, if any (`mouse_enter` of the
+            ;; buttons "R" and "?" of the shop)
+            if opts && opts.info {
+                await InfoText(x, y + 20, opts.info, true)
+            } else {
+                await(false)
             }
         } with {
             loop on :draw {

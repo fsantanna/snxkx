@@ -1,0 +1,7 @@
+mv	450.0	40.0	tick	10
+mv	319.0	56.0	tick	30
+mv	45.0	182.0	tick	50
+dn	45.0	182.0	gold	2
+mv	60.0	49.0	tick	90
+mv	240.0	18.0	tick	110
+mv	388.0	18.0	tick	130

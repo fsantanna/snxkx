@@ -1,0 +1,21 @@
+;; The texts under the mouse in the shop, by script: a unit of the party,
+;; the icon of a class of the party (its units light up), an item, a click
+;; on it without the gold (a message for 2 s), the icon of a card, the
+;; level of the shop, and the button "R".
+include "../../src/game.atm"
+spawn Background()
+spawn Input()
+val run = [ level=2, loop=0, gold=2, shop_level=1, shop_xp=0,
+            units=[ [character="swordsman", level=2, reserve=[1, 0]], [character="archer", level=1, reserve=[0, 0]] ],
+            passives=[ [passive="amplify", level=1, xp=0] ] ]
+spawn {
+    loop e on :mouse.mv {
+        print("mv", e.x, e.y, "tick", eng.tick())
+    }
+}
+spawn {
+    loop e on :mouse.dn {
+        print("dn", e.x, e.y, "gold", run.gold)
+    }
+}
+await Shop(run)

@@ -1340,6 +1340,10 @@ int main (int argc, char** argv) {
         if (st == A_OK) {
             st = eg_emit("draw", NULL, 0, 0, -1);
         }
+        // what goes over the screen: texts under the mouse, transitions
+        if (st == A_OK) {
+            st = eg_emit("overlay", NULL, 0, 0, -1);
+        }
         Uint64 p2 = SDL_GetPerformanceCounter();
         if (st == A_OK) {
             // in test mode, only the frames of the screenshots are rendered

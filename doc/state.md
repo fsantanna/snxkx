@@ -56,11 +56,16 @@ a time, in the parts that the port covers, with what became of each one.
 | `HealingOrb.cant_be_picked_up`, `Gold.cant_be_picked_up` | `player.lua:3670-3671, 3777-3778` | no pickup in the first 0.5s | gone: `await 500ms` before awaiting a unit |
 | `Arena.choosing_passives` | `arena.lua:719, 294, 361, 1127` | the arena waits for the choice | gone: the choice is a step of `Clear` |
 | `PassiveCard.selected`, `ItemCard.selected` | `buy_screen.lua:1392, 1443, 1542` | the look, and whether a click counts | the phases of the card (a local for the drawing of the item) |
+| `info_text` of an object under the mouse (`Button`, `LevelButton`, `CharacterPart`, `CharacterIcon`, `ClassIcon`, `ItemCard`, `PassiveCard`) | `buy_screen.lua:119-128, 1261-1323, 1395-1416, 1515-1562, 1759-1788, 2013-2060` | whether a text is open, to close it on exit, on death, and before making it again | gone: the text is a branch of the phase *over* of its owner (`src/info.atm`) |
+| `info_text`, `info_text_2` of a message (`BuyScreen`, `GoButton`, `RerollButton`, `LevelButton`, `ItemCard`), with a tagged timer | `buy_screen.lua:275-322, 692-700, 824-864, 998-1027, 1445-1452` | one message at a time for its owner, closed 2 s after the last request | gone: a task per owner (`Messages`), whose 2 s start again in a `par :any` |
+| `CharacterPart.highlighted` | `buy_screen.lua:1335-1345, 2004-2050` | the look of a square while the icon of one of its classes is under the mouse | a local of the square, set on `:Shop.highlight` from the icon |
 
-Count so far: 63 variables in the original (counting the nine flags of
-the steering as one, and the `selected` of the four buttons of the shop
-as one). In the port, 31 of them are gone. The other 32 became 32
-variables, none of which guards a phase of the task that sets it:
+Count so far: 66 variables in the original (counting the nine flags of
+the steering as one, the `selected` of the four buttons of the shop as
+one, and the `info_text` of the objects under the mouse, and of the
+messages, as one each). In the port, 33 of them are gone. The other 33
+became 33 variables, none of which guards a phase of the task that sets
+it:
 
 - 17 fields that other tasks read (from 18 of the original): the curses
   (4), the stun, the slow, the taunt, the throws (2), the chain
@@ -70,22 +75,11 @@ variables, none of which guards a phase of the task that sets it:
 - 6 counts: of the tasks of a flash and of a bar of hp (2), of the
   curses toward a big hit (2), of the repeats of a sorcerer and of the
   gun kata (2);
-- 5 locals of a task: `selected` of a card and of an item, `created` of
-  a square, `invulnerable` of a critter, the count of the barrager;
+- 6 locals of a task: `selected` of a card and of an item, `created` and
+  `lit` of a square, `invulnerable` of a critter, the count of the
+  barrager;
 - 4 fields of the run or of the HUD (from 3): `locked` and `cards`,
   `start_time`, `wave`.
-
-- 17 are fields that other tasks read: the curses (4), the stun, the
-  slow, the taunt, the throws (2), the chain infusion, the second life,
-  undead, the haste, the stored healing, and the three of the elites
-  (`aiming`, a count shared by two attacks; `headbutting`; `boost`);
-- 6 are counts: of the tasks of a flash and of a bar of hp (2), of the
-  curses toward a big hit (2), of the repeats of a sorcerer and of the
-  gun kata (2);
-- 3 are locals of a task: `selected` of a card, `created` of a square,
-  `invulnerable` of a critter (and the count of the barrager);
-- 4 are fields of the run or of the HUD: `locked`, `cards`, `start_time`,
-  `wave`.
 
 The two counters are state, but not a flag guarding a phase: each
 counts tasks that are running, and a task restarts the effect by simply

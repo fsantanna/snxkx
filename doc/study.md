@@ -1136,3 +1136,105 @@ the earlier sections: a construct that cannot be picked up for 0.5s
 awaits 0.5s before it awaits a unit (`cant_be_picked_up`), and the
 choice of a passive is a step of the end of the level
 (`choosing_passives`).
+
+---
+
+## 13. Texts under the mouse: a branch, not a field
+
+Every object of the shop that explains itself keeps its text in a
+field, and five methods watch it (`buy_screen.lua:1257-1323`):
+
+```lua
+function CharacterPart:on_mouse_enter()
+  ...
+  self.info_text = InfoText{group = main.current.ui, ...}
+  self.info_text:activate({...}, nil, nil, nil, nil, 16, 4, nil, 2)
+  self.info_text.x, self.info_text.y = gw/2, gh/2 + 10
+end
+
+function CharacterPart:on_mouse_exit()
+  self.selected = false
+  if self.info_text then
+    self.info_text:deactivate()
+    self.info_text.dead = true
+  end
+  self.info_text = nil
+end
+
+function CharacterPart:die()
+  self.dead = true
+  ...
+  if self.info_text then
+    self.info_text:deactivate()
+    self.info_text.dead = true
+    self.info_text = nil
+  end
+end
+```
+
+The same lines are in seven classes. The messages ("not enough gold")
+add a tagged timer to the field (`buy_screen.lua:998-1005`):
+
+```lua
+if not self.info_text then
+  self.info_text = InfoText{group = main.current.ui}
+  self.info_text:activate({...})
+  ...
+end
+self.t:after(2, function() self.info_text:deactivate(); self.info_text.dead = true; self.info_text = nil end, 'info_text')
+```
+
+In the port, the text is one more branch of the phase *over* of its
+owner (`src/shop.atm`, `CharacterPart`):
+
+```
+par :any {
+    await :mouse.mv until !inside()
+} with {
+    await InfoText(W/2, H/2 + 10, info_character(c, level, price), !shop)
+} with {
+    ...                                 ;; the clicks
+}
+```
+
+and a message is a task of its owner (`src/info.atm`, `Messages`):
+
+```
+loop {
+    val e = await :Message until it.slot == slot
+    par :any {
+        await InfoText(x, y, e.lines, real)
+    } with {
+        loop {
+            val again = par :any {
+                await 2s
+                false
+            } with {
+                await :Message until it.slot == slot
+                true
+            }
+            until !again
+        }
+    }
+}
+```
+
+### Analysis
+
+The field `info_text` answers three questions of the original: is a
+text open (to make one only once), which one is it (to close it on
+exit), and must the object close it when it dies. In the port, the text
+lives in the branch of the phase in which it shows: the end of the
+phase closes it, and so does the end of its owner, since a branch ends
+with the task that holds it. No method checks for it.
+
+A message is the restart of section 12: the 2 s are a `par :any` with
+the next request, and the text, in the other branch, stays as it was.
+The original keeps the first text too (`if not self.info_text`), and
+only its timer starts again.
+
+One thing the field did that a branch does not: the order of drawing.
+The objects of the group `ui` draw in the order they were made, so a
+text opened later is on top. The tasks of the port draw in the order of
+the tree. The port keeps a list of the texts that are open, in the
+order they opened, and the first one draws them all (`INFO`).

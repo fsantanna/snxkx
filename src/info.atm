@@ -1,0 +1,207 @@
+;; The texts under the mouse (`InfoText` of `shared.lua`): a dark box
+;; with a text, over the screen. It opens with a tween of its scale
+;; (0.1 s) and a pull of its spring, and it is gone at once when its owner
+;; is no longer under the mouse, or ends: in the original, `deactivate()`
+;; starts a tween to close it, but the owner sets `dead` right after, so
+;; that tween never shows.
+;;
+;; A text lives inside the phase of its owner (the branch of a `par`
+;; while the mouse is over it), so there is no `info_text` field to
+;; create, check, and clear in `on_mouse_enter`, `on_mouse_exit`, and
+;; `die`. It draws on `:overlay`, after the screen, as the group `ui` of
+;; the original is drawn after `main`; and the texts that are open draw in
+;; the order they opened, as the objects of a group (a text opened later
+;; is on top), whatever their places in the tree of tasks.
+
+;; The texts that are open, in the order they opened: [t, x, y, st, s]
+;; each. The first one draws all of them.
+val INFO = []
+
+func info_draw () {
+    loop _, r in INFO {
+        eng.push(r.x, r.y, 0, r.st.sx*r.s.x, r.st.sy*r.s.x)
+        eng.rect(r.x, r.y, r.t.w + 16, r.t.h + 4, r.t.h/12, r.t.h/12, bg@(-2))
+        text_draw(r.t, r.x, r.y + 2)
+        eng.pop()
+    }
+}
+
+;; As `activate(lines, nil, nil, nil, nil, 16, 4, nil, 2)`, the call of
+;; every text of the original: 16 and 4 pixels around the text, which is
+;; 2 pixels down. With `real`, it moves in real time (`force_update`).
+task InfoText (x, y, lines, real) {
+    val st = [ sx=0, sy=0 ]
+    val s = spring(1)
+    val r = [ t=text(lines), x=x, y=y, st=st, s=s ]
+    set INFO@+ = r
+    defer {
+        loop i, o in INFO {
+            if o == r {
+                vector.remove(INFO, i)
+                break
+            }
+        }
+    }
+    val Springs_ = if real => UISprings => Springs
+    val Tween_ = if real => TweenReal => Tween
+    spawn Springs_(s)
+    spring_pull(s, 0.075)
+    spawn {
+        await Tween_(0.1, st, [sx=1, sy=1], cubic_in_out)
+        set st.sx = 1
+        set st.sy = 1
+    }
+    loop on :overlay {
+        if INFO@0 == r {
+            info_draw()
+        }
+    }
+}
+
+;; The lines of a text of one line, centered.
+func info_line (s) {
+    [ [text=s, font=pixul_font, alignment=:center] ]
+}
+
+;; The messages of an owner, each for 2 s, as
+;;
+;;     if not self.info_text then self.info_text = InfoText{...} end
+;;     self.t:after(2, function() ... self.info_text = nil end, 'info_text')
+;;
+;; A message that comes while one is shown does not change its text, but
+;; starts its 2 s again (the timer with the tag `'info_text'` replaces
+;; the running one). The owner emits `:Message [slot, lines, sound]` to
+;; itself.
+task Messages (slot, x, y, real) {
+    loop {
+        val e = await :Message until it.slot == slot
+        if e.sound {
+            ;; a sound only when the text opens (`GoButton`)
+            play(e.sound, [pitch=rfloat(0.95, 1.05), volume=0.5])
+        }
+        par :any {
+            await InfoText(x, y, e.lines, real)
+        } with {
+            loop {
+                val again = par :any {
+                    await 2s
+                    false
+                } with {
+                    await :Message until it.slot == slot
+                    true
+                }
+                until !again
+            }
+        }
+    }
+}
+
+;;; THE TEXTS ;;;
+
+;; As `string:capitalize`: the first letter in upper case.
+func capitalize (s) {
+    string.upper(string.sub(s, 0, 0)) ++ string.sub(s, 1)
+}
+
+;; A unit of the party (`CharacterPart:on_mouse_enter`), or of a shop
+;; card (`CharacterIcon`, with `cost` and not `price`): its name, level,
+;; tier, and price; its classes; what it does; and the effect of its third
+;; level, gray before it.
+func info_character (c, level, price, cost) {
+    val lv3 = level == 3
+    val head = if cost
+        => "[" ++ character_color_strings@(c) ++ "]" ++ capitalize(c) ++ "[fg] - cost: [yellow]" ++ tostring(cost)
+        => "[" ++ character_color_strings@(c) ++ "]" ++ capitalize(c) ++ "[fg] - [yellow]Lv." ++ tostring(level) ++
+           "[fg], tier [yellow]" ++ tostring(character_tiers@(c)) ++ "[fg] - sells for [yellow]" ++ tostring(price)
+    [
+        [text=head, font=pixul_font, alignment=:center, height_multiplier=1.25],
+        [text="[fg]Classes: " ++ character_class_strings@(c), font=pixul_font, alignment=:center, height_multiplier=1.25],
+        [text=character_descriptions@(c)@(level), font=pixul_font, alignment=:center, height_multiplier=2],
+        [text="[" ++ (if lv3 => "yellow" => "light_bg") ++ "]Lv.3 [" ++ (if lv3 => "fg" => "light_bg") ++ "]Effect - " ++
+              (if lv3 => character_effect_names@(c) => character_effect_names_gray@(c)),
+         font=pixul_font, alignment=:center, height_multiplier=1.25],
+        [text=(if lv3 => character_effect_descriptions@(c) => character_effect_descriptions_gray@(c))@(level),
+         font=pixul_font, alignment=:center],
+    ]
+}
+
+;; An item (`ItemCard:create_info_text`): its name and level, with its
+;; experience, cost, and price when it may level up; and what it does.
+func info_item (p, fixed) {
+    val head = if (p.level == 3) || fixed
+        => "[fg]" ++ passive_names@(p.passive) ++ ", [yellow]Lv." ++ tostring(p.level)
+        => "[fg]" ++ passive_names@(p.passive) ++ ", [yellow]Lv." ++ tostring(p.level) ++ "[fg], XP: [yellow]" ++
+           tostring(p.xp) ++ "/" ++ tostring(match p.level { 1 => 2 ; 2 => 3 ; else => 0 }) ++
+           "[fg], +1 XP cost: [yellow]5[fg], sells for: [yellow]" ++ tostring(match p.level { 1 => 10 ; 2 => 20 ; else => 30 })
+    [
+        [text=head, font=pixul_font, alignment=:center, height_multiplier=1.25],
+        [text=passive_descriptions_level@(p.passive)@(p.level), font=pixul_font, alignment=:center, height_multiplier=1.25],
+    ]
+}
+
+;; The level of a class for its text (`ClassIcon:on_mouse_enter`): 3, 2,
+;; or 1 by the thresholds it reaches (the second for the explorer, whose
+;; two are 1), or 0.
+func class_info_level (class, units) {
+    val s = CLASS_SETS@(class)
+    val n = class_counts(units)@(class)
+    ifs {
+        s@2 && (n >= s@2) => 3
+        n >= s@1 => 2
+        n >= s@0 => 1
+        else => 0
+    }
+}
+
+;; A class (`ClassIcon`): its name and how many units have it; its sets,
+;; with the one reached in yellow.
+func info_class (class, units) {
+    val lv = class_info_level(class, units)
+    val name = if class == "conjurer" => "Builder" => capitalize(class)
+    ;; the level 0 is as the level 3 of a class of two sets: all gray
+    val desc = ifs {
+        lv > 0 => class_descriptions@(class)@(lv)
+        class == "sorcerer" => do {
+            val d = class_descriptions@(class)@(3)
+            vector.join(string.split(d, "[yellow]"), "[light_bg]")
+        }
+        else => class_descriptions@(class)@(3)
+    }
+    [
+        [text="[" ++ class_color_strings@(class) ++ "]" ++ name ++ "[fg] - owned: [yellow]" ++ tostring(class_counts(units)@(class)),
+         font=pixul_font, alignment=:center, height_multiplier=1.25],
+        [text=desc, font=pixul_font, alignment=:center],
+    ]
+}
+
+;; The level of the shop (`LevelButton:create_info_text`): its level and
+;; experience, and the odds of each tier, now and at the next level.
+func info_shop_level (level, xp) {
+    val o = level_to_shop_odds@(level)
+    if level == 5 {
+        return [
+            [text="[yellow]Lv.5[fg] shop", font=pixul_font, alignment=:center, height_multiplier=1.5],
+            [text="[bg10]chances of units appearing on the shop", font=pixul_font, alignment=:center, height_multiplier=1.25],
+            [text="[yellow]current shop level", font=pixul_font, alignment=:left, height_multiplier=1.25],
+            [text="[fg]tier 1: " ++ tostring(o@0) ++ "%", font=pixul_font, alignment=:left, height_multiplier=1.25],
+            [text="[green]tier 2: " ++ tostring(o@1) ++ "%", font=pixul_font, alignment=:left, height_multiplier=1.25],
+            [text="[blue]tier 3: " ++ tostring(o@2) ++ "%", font=pixul_font, alignment=:left, height_multiplier=1.25],
+            [text="[purple]tier 4: " ++ tostring(o@3) ++ "%", font=pixul_font, alignment=:left, height_multiplier=1.25],
+        ]
+    }
+    val n = level_to_shop_odds@(level + 1)
+    val row = func (k, c, m) {
+        val pad = if o@(k) < 10 => "  " => ""
+        [text="[" ++ c ++ "]tier " ++ tostring(k + 1) ++ ": " ++ tostring(o@(k)) ++ "%" ++ pad ++
+              "                                 [" ++ m ++ "]tier " ++ tostring(k + 1) ++ ": " ++ tostring(n@(k)) ++ "%",
+         font=pixul_font, alignment=:left, height_multiplier=1.25]
+    }
+    [
+        [text="[yellow]Lv." ++ tostring(level) ++ "[fg] shop, XP: [yellow]" ++ tostring(xp) ++ "/" ++
+              tostring(match level { 1 => 3 ; 2 => 4 ; 3 => 5 ; else => 6 }) ++ "[fg], +1 XP cost: [yellow]5",
+         font=pixul_font, alignment=:center, height_multiplier=1.5],
+        [text="[bg10]chances of units appearing on the shop", font=pixul_font, alignment=:center, height_multiplier=1.25],
+        [text="[yellow]current shop level                  [fgm10]next shop level", font=pixul_font, alignment=:left, height_multiplier=1.25],
+        row(0, "fg", "fgm8"), row(1, "green", "fgm6"), row(2, "blue", "fgm4"), row(3, "purple", "fgm2"),
+    ]
+}

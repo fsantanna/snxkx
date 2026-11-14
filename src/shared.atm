@@ -113,7 +113,7 @@ task Transition (e) {
     val color = if STATE.dark_transitions => bg@(-2) => e.color
     val t = text(e.lines || [ [text=dark_text(e.text || ""), font=pixul_font, alignment=:center] ])
     spawn {
-        loop on :draw {
+        loop on :overlay {
             eng.circle(st.x, st.y, st.rs, color)
             text_draw(t, W/2, H/2, 0, st.ts, st.ts)
         }

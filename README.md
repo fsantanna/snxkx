@@ -27,7 +27,7 @@ tst/run.sh          # the tests, with no screen
 The game as played: the menu, the shop, the 25 levels with their
 waves, elites, and bosses, all 54 characters and 16 classes, the 82
 passives, the win and the loops, new game plus, the options, the music,
-and the save. Left out: the texts under the mouse, the tutorial, the
+and the save, and the texts under the mouse. Left out: the tutorial, the
 credits, and Steam (see `doc/case-study.md`).
 
 - `doc/case-study.md`: what became of the timers and the flags, in short.

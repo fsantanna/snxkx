@@ -1,8 +1,9 @@
 ;; The choice of a passive after every third level (`Arena:set_passives`
 ;; and `PassiveCard`, `arena.lua:679-756`, `buy_screen.lua:1360-1420`).
 
-;; A card of a passive to choose (`PassiveCard`): its name and its icon. A
-;; click (or its number) emits `:Passive.pick [i]` to the screen.
+;; A card of a passive to choose (`PassiveCard`): its name and its icon,
+;; and under the mouse what it does. A click (or its number) emits
+;; `:Passive.pick [i]` to the screen.
 task PassiveCard (screen, i, x, y, passive) {
     val s = spring(1)
     spring_pull(s, 0.2, 200, 10)
@@ -33,6 +34,9 @@ task PassiveCard (screen, i, x, y, passive) {
                 loop on :mouse.dn until it.but == 1 {
                     emit @screen :Passive.pick [ i=i ]
                 }
+            } with {
+                await InfoText(W/2, H/2 + H/4 - 6,
+                    [ [text=passive_descriptions@(passive), font=pixul_font, alignment=:center, height_multiplier=1.25] ], true)
             }
         }
     } with {
@@ -51,26 +55,14 @@ task ChoosePassive (A, ui) {
     spawn @ui Modal()
     spawn @ui TweenReal(4, CAM, [x=W/2, y=H/2, r=0], linear)
     spawn @ui Text2(W/2 + 45, H/2 - 75, text([ [text="[fg, wavy]choose one", font=fat_font, alignment=:center] ]))
-    spawn @ui Text2(40, 20, text([ [text="[wavy_mid, fg]your build", font=pixul_font, alignment=:center] ]))
-    loop i, u in run.units {
-        val c = unit_character(u)
-        spawn @ui Text2(20 + 14 + text_width(pixul_font, c)/2, 40 + i*19,
-                        text([ [text="[" ++ character_color_strings@(c) ++ "]" ++ c, font=pixul_font, alignment=:left] ]))
-    }
+    spawn @ui Build(run, H - 30)
     spawn {
         loop on :draw {
-            loop i, u in run.units {
-                val c = unit_character(u)
-                eng.rect(20, 40 + i*19, 14, 14, 3, 3, character_colors@(c))
-                print_centered(pixul_font, tostring(unit_level(u)), 20.5, 42 + i*19, 0, 1, 1,
-                               RAMPS@(character_color_strings@(c))@(-5))
-            }
-            loop i, p in run.passives {
-                draw_image(PASSIVE_IMAGES@(p.passive), 120 + i*30, H - 30, 0, 0.8*0.75, 0.7*0.75, fg@0)
-            }
             text_draw(shop_text("[wavy_mid, fg]gold: [yellow]" ++ tostring(run.gold)), W - 40, H - 17)
         }
     }
+    pin ms = tasks()
+    spawn @ms Messages(:reroll, W/2, H/2 + 10, true)
     var free = A.level == 3
     loop _, u in run.units {
         if (unit_character(u) == "merchant") && (unit_level(u) == 3) {
@@ -104,6 +96,7 @@ task ChoosePassive (A, ui) {
                         if !free && (run.gold < 5) {
                             play(error1, [pitch=rfloat(0.95, 1.05), volume=0.5])
                             spring_pull(e.spring, 0.2, 200, 10)
+                            emit @me :Message [ slot=:reroll, lines=info_line("[fg]not enough gold") ]
                         } else {
                             play(ui_switch2, [pitch=rfloat(0.95, 1.05), volume=0.5])
                             spring_pull(e.spring, 0.2, 200, 10)
