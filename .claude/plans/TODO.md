@@ -6,51 +6,49 @@ possible.
 
 ## A. Decisions waiting for the author
 
-1. The new name of the compiler. `fsantanna/ceu-atmos` is now
-   `ia-atmos/lang`; `ext/ceu-atmos` still points to the old address
-   (which redirects), and 35 mentions in 11 files use the old name
-   (`CREDITS.md`, `README.md`, `run.sh`, `tools/setup.sh`,
-   `build/one.sh`, `tst/run.sh`, `doc/compiler.md`, `doc/bench.md`,
-   `doc/study.md`, `261111-snkrx.md`, `build/cg.out`). This repository
-   moved too: a push to `fsantanna/snxkx` answers that it is now
-   `ia-atmos/snxkx` (the old address still works), and it may become
-   `ia-atmos/sdl-snkrx`. Recommended: wait for the
-   renames of the organization, then update all names in one commit,
-   keeping the folder `ext/ceu-atmos` (fewer changes; the folder name
-   is local).
-2. A warning of the compiler for a spawn with no pool in a nested block
+1. A warning of the compiler for a spawn with no pool in a nested block
    (`doc/compiler.md`, 7), raised by the `ceu-atmos` session as a
-   language decision. Recommended: yes, a warning; the port lost its
-   attacks to it from S6 to S9, unseen.
-3. `doc/compiler.md`, 1: may a pool or a task have a clock of its own?
-   Recommended: no change needed by the port (it scales the global
-   time); a clock per pool would make the slow motion simpler.
-4. `doc/compiler.md`, 2: should the tables built inside a `pin` be
-   pinned with it? Recommended: yes; the port broadcasts the contacts
-   of the physics because of it.
-5. `doc/compiler.md`, 6: does `await :all` on an empty pool end at once?
+   language decision. Recommended: yes; the port lost its attacks to it
+   from S6 to S9, unseen.
+2. `doc/compiler.md`, 1: a clock of its own for a task or a pool. An
+   emit of time must be global today (`emit @t (10ms)` is refused with
+   `invalid emit : expected global`, at `9ad3291`). Recommended: allow
+   `emit @t (d)` (and `@ts`), which would let the options freeze the
+   game while the interface runs, instead of the global `eng.slow`.
+3. `doc/compiler.md`, 2: tables built inside a `pin` pinned with it.
+   Sent to the `pin` session with context. Recommended: yes.
+4. `doc/compiler.md`, 6: `await :all` on an empty pool ends at once?
    Recommended: yes; the port keeps a guard meanwhile.
+5. Fidelity and expressiveness: the port is faithful by events and
+   formulas, not tick by tick (Box2D 3.1 against the 2.3 of LÖVE, so
+   the motion is close, not identical). The new rule (relax exactness
+   once fully faithful) needs a decision: does this port count as
+   faithful enough to relax? Recommended: tag the current commit
+   (`exact`), then relax only what serves exactness alone (the order
+   of random numbers, a frame of delay), each in its own commit, listed
+   in a document.
 
 ## B. Work known and not done
 
-1. Left out of the port: the texts under the mouse (`InfoText`), the
-   tutorial, the credits screen, dragging a unit in the party, the
-   achievements and Steam, the buttons that open web pages, and the
-   options for mouse control, the run timer, the window size, and the
-   cooldowns and arrow drawn on the snake.
-2. The new `await(n, :e)` of the compiler (also `watching n, :e` and
-   `loop on n, :e`) could replace counters kept by hand in the port; not
-   tried. Optional.
+1. Features left out, now to be done (the author asked for all):
+   the texts under the mouse (`InfoText`), the tutorial, the credits
+   screen, dragging a unit in the party, the buttons that open web
+   pages, the options for mouse control, the run timer, the window
+   size, the cooldowns and the arrow drawn on the snake, and the
+   achievements (local, without Steam).
+2. Use the new `await(n, :e)` (and `watching n, :e`, `loop on n, :e`)
+   where the port counts events by hand.
 3. Why the original peaks at 946 MB was not investigated (`bench.md`).
+4. Move the platform part of `eng/` to `ia-atmos/env-sdl` when that
+   environment is ready (second after Pingus), with identical traces
+   and screenshots. Tell the `env-sdl` session early that the shadows
+   and outlines are drawn in canvases composed premultiplied, as LÖVE
+   does, so a common interface must keep that.
 
 ## C. Reported and not acknowledged
 
-1. All milestones done (S0 to S9), at `2757664`, with the summary and
-   conclusions of the study (`doc/case-study.md`).
-2. Finding 7 and its fix: the units of the port never attacked from S6
-   until S9; fixed with pools, documented in `doc/compiler.md`.
-3. The benchmark rerun (`41ae483`): the S7 stress numbers were measured
-   on a port that did not attack and should not be compared.
+1. The benchmark rerun (`41ae483`): the S7 stress numbers were measured
+   on a port that did not attack and are not to be compared.
 
 ## D. Older items
 
