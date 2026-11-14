@@ -101,9 +101,41 @@ menu reaches the shop in tick 113 in both, and the first marker of level
 1 comes 269 ticks after the arena starts in the port, 272 in the
 original (`study.md`, 9).
 
-The code: the game is 8647 lines and 83761 tokens in the port (27
-files), against 10347 lines and 134558 tokens in the eight files of the
-game of the original; the engines, 2128 lines and 18826 tokens (Atmos
-and C) against 4433 and 40853 (`engine/` without `engine/external`).
-The original covers more than the port (the items above), and its
-engine is a general one, so these do not compare part for part.
+The code, counted without comments or blank lines:
+
+| | original | port | port/original |
+|-|---------:|-----:|--------------:|
+| game, lines | 10381 | 8647 | 83% |
+| game, tokens | 134827 | 83761 | 62% |
+| game without `main.lua` and `data.atm`, lines | 8422 | 6982 | 83% |
+| game without `main.lua` and `data.atm`, tokens | 113682 | 69111 | 61% |
+| engine, lines | 4433 | 2128 | 48% |
+| engine, tokens | 41735 | 18826 | 45% |
+
+The original is the ten Lua files of the game at `6b93a64`; its engine
+is `engine/` without `engine/external`. Most of
+`main.lua` of the original, and all of `src/data.atm` of the port, are
+the tables of the game (names, costs, classes, and texts of the
+characters, passives, and items); `main.lua` also has the start of the
+game and the options. The original covers more than the
+port (the items above), and its engine is a general one, so these do
+not compare part for part.
+
+The lines fall less than the tokens, for three measured reasons:
+
+- The Lua of the original is denser: 13.0 tokens per line, against 9.7
+  in the port. A timer with its callback often fits in one line of Lua
+  (`self.t:after(0.5, function() self.x = 0 end)`), and becomes two or
+  three in the port (`await 500ms`, then the code).
+- Closing lines: 1647 lines of the port hold only `}` and the like
+  (19% of its lines), against 1467 lines of only `end` in the original
+  (14%).
+- The control flow is a small part of either: 417 lines of the
+  original call a timer, and 167 more close a callback (`end)`), 6% of
+  its lines. The port has 1172 lines with `await`, `par`, `spawn`,
+  `watching`, `emit`, `defer`, or `loop ... on` (14%): what the
+  original does with flags and callbacks takes fewer tokens in the
+  port, but each task also says where it lives (51 pools, 98
+  `spawn { }`), and what it undoes when it ends. The rest, about four
+  fifths of both, is formulas, tables, and drawing, which are the same
+  size in any language.
