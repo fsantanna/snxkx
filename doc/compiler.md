@@ -1,6 +1,6 @@
 # The compiler, as seen from the port
 
-Findings about `fsantanna/ceu-atmos` while porting SNKRX, with what the
+Findings about `ia-atmos/lang` while porting SNKRX, with what the
 port does about each one. Each entry says the commit of the compiler
 where it was seen, and its status.
 

@@ -14,8 +14,8 @@
 
 cd "$(dirname "$0")/.."
 ROOT=$(pwd)
-ATMOS="$ROOT/ext/ceu-atmos/atmos"
-export ATMOS_HOME="$ROOT/ext/ceu-atmos"
+ATMOS="$ROOT/ext/atmos/atmos"
+export ATMOS_HOME="$ROOT/ext/atmos"
 export ATMOS_CFLAGS="-O0 -I$ROOT -I$ROOT/ext/box2d/include"
 export ATMOS_LDFLAGS="$ROOT/ext/box2d/build/libbox2d.a -lSDL2 -lSDL2_image -lSDL2_ttf -lSDL2_mixer -lm"
 export SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy SNX_MUTE=1

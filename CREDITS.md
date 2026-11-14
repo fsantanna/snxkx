@@ -21,6 +21,6 @@ of the game in `atmos/readme.md`, which `doc/` starts from.
 
 ## Tools
 
-- Atmos: <https://github.com/fsantanna/ceu-atmos>.
+- Atmos: <https://github.com/ia-atmos/lang>.
 - SDL2: <https://www.libsdl.org>.
 - Box2D, by Erin Catto: <https://box2d.org> (MIT).

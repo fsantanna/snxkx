@@ -1,7 +1,7 @@
-# snxkx
+# sdl-snkrx
 
 A port of [SNKRX](https://github.com/a327ex/SNKRX) to
-[Atmos](https://github.com/fsantanna/ceu-atmos), over SDL2.
+[Atmos](https://github.com/ia-atmos/lang), over SDL2.
 
 SNKRX is an arcade roguelite by a327ex: a snake of heroes that attack
 by themselves, in an arena with waves of enemies, with a shop between
@@ -45,7 +45,7 @@ credits, and Steam (see `doc/case-study.md`).
 |------|-------|
 | Original | `a327ex/SNKRX@6b93a64`, Lua over LÖVE 11 |
 | Student port, read as a starting point | `kboltiz/SNKRX@18c593b`, folder `atmos/` |
-| Compiler | `fsantanna/ceu-atmos`, branch `main` |
+| Compiler | `ia-atmos/lang`, branch `main` |
 | Physics | Box2D v3 (C) |
 
 ## License

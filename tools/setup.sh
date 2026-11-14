@@ -1,7 +1,7 @@
 #!/bin/sh
 # Sets up the environment of the port, in `ext/` (not versioned):
 #
-#   ext/ceu-atmos   the compiler, built with `make`
+#   ext/atmos       the compiler, built with `make`
 #   ext/box2d       Box2D v3, built as `ext/box2d/build/libbox2d.a`
 #   ext/SNKRX       the original, the reference and the source of assets
 #
@@ -22,10 +22,10 @@ ATMOS_REV=main
 BOX2D_REV=v3.1.1
 SNKRX_REV=6b93a64
 
-if [ ! -d ext/ceu-atmos ]; then
-    git clone -q https://github.com/fsantanna/ceu-atmos ext/ceu-atmos
+if [ ! -d ext/atmos ]; then
+    git clone -q https://github.com/ia-atmos/lang ext/atmos
 fi
-(cd ext/ceu-atmos && git fetch -q origin && git checkout -q "origin/$ATMOS_REV" && make -s)
+(cd ext/atmos && git fetch -q origin && git checkout -q "origin/$ATMOS_REV" && make -s)
 
 if [ ! -d ext/box2d ]; then
     git clone -q --depth 1 -b "$BOX2D_REV" https://github.com/erincatto/box2d ext/box2d
@@ -45,4 +45,4 @@ if [ ! -d ext/SNKRX ]; then
 fi
 (cd ext/SNKRX && git checkout -q "$SNKRX_REV")
 
-echo "ok: ext/ceu-atmos/atmos ext/box2d/build/libbox2d.a ext/SNKRX"
+echo "ok: ext/atmos/atmos ext/box2d/build/libbox2d.a ext/SNKRX"

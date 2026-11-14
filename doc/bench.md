@@ -16,7 +16,7 @@ other, with the same scripted input and the same seed
 - The original: LÖVE 11.5 with LuaJIT 2.1, in the bench mode of
   `tools/bench/bench.lua` (every loop is one tick of 1/60 s).
 - The port: at `b2c2089` (the whole game, S9), built with `-O2`,
-  compiler `ceu-atmos` at `995c3b2`.
+  compiler `ia-atmos/lang` at `995c3b2`.
 - Each run is a process, measured by `wait4`: the time on the clock, the
   CPU time (user and system, of all of its threads, which includes the
   threads of llvmpipe), and the peak of its resident memory. The display

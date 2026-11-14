@@ -1,6 +1,6 @@
 ;; The save of the state and of the run, as `system.save_state` and
 ;; `system.save_run` of the original, in files of lines of words in the
-;; directory `SNX_SAVE` (by default `~/.local/share/snxkx`; in the test
+;; directory `SNX_SAVE` (by default `~/.local/share/sdl-snkrx`; in the test
 ;; mode, only if `SNX_SAVE` is given).
 ;;
 ;;     state.txt                       run.txt
@@ -17,7 +17,7 @@
 ;; An empty `run.txt` means no run to continue.
 
 val SAVE_DIR = os.getenv("SNX_SAVE") ||
-    (if os.getenv("SNX_FRAMES") => nil => ((os.getenv("HOME") || ".") ++ "/.local/share/snxkx"))
+    (if os.getenv("SNX_FRAMES") => nil => ((os.getenv("HOME") || ".") ++ "/.local/share/sdl-snkrx"))
 
 func save_lines (name, lines) {
     if SAVE_DIR {

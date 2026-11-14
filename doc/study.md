@@ -8,7 +8,7 @@ It starts from the comparison written by Kazabite Boltiz for a partial
 port to the reference Atmos over `pico-sdl` (`kboltiz/SNKRX@18c593b`,
 `atmos/readme.md`). Its sections and their order are kept; the code and
 the analysis are redone for this port, which runs on another compiler
-(`fsantanna/ceu-atmos`), in pixels, with the drawing of the original.
+(`ia-atmos/lang`), in pixels, with the drawing of the original.
 
 References to the original are `file:line` at `6b93a64`; references to
 the port are `file:line` in this repository.
